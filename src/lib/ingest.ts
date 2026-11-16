@@ -6,7 +6,7 @@ import { estimateSales, MAX_GAP_MS, toCompact, type CompactAuction } from "./pri
 import { REFERENCE_ITEMS } from "./reference-items";
 
 const CHUNK = 1000;
-const MAX_NEW_ITEMS_PER_RUN = 400;
+const MAX_NEW_ITEMS_PER_RUN = 3000;
 
 export function chunks<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
