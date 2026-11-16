@@ -21,6 +21,7 @@ export async function syncRecipes(db: SupabaseClient, blizzard: BlizzardClient, 
 
   for (const prof of professions) {
     const name = prof.name ?? `Profession ${prof.id}`;
+    if (name.includes("[DNT]")) continue; // profesiones internas de prueba de Blizzard
     const detail = await blizzard.profession(prof.id);
     const refs = new Map<number, RecipeRef>();
     for (const tier of detail?.skill_tiers ?? []) {
