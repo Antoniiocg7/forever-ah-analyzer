@@ -36,6 +36,7 @@ El resumen diario y el borrado de datos horarios de más de 7 días los hace `pg
 | `pnpm dev` | Web en local |
 | `pnpm discover` | Fase 0: descarga todas las casas y sus precios de referencia |
 | `pnpm ingest` | Ingesta de las casas marcadas |
+| `pnpm sync-recipes` | Descarga todas las recetas de todas las profesiones (una vez, y tras cada parche) |
 | `pnpm test` | Tests (Vitest) |
 | `pnpm typecheck` / `pnpm lint` | Comprobaciones |
 
@@ -44,4 +45,5 @@ El resumen diario y el borrado de datos horarios de más de 7 días los hace `pg
 - Los IDs de los materiales de referencia (`src/lib/reference-items.ts`) son los de Classic.
 - La comisión de la casa neutral (Blackwater): `settings.ah_cut.neutral` está a `null`.
 - De dónde sacar nombres e iconos del ~43% de objetos que dan 404 en `static-forever`.
+- El formato de las recetas en `static-forever` (se ha supuesto igual al de retail) y que falten el nivel de habilidad y los colores de skill-up.
 - Ingesta en Edge Function o en GitHub Actions: hay que medir con datos reales (`pnpm ingest` imprime tiempo y memoria).

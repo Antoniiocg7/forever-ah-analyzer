@@ -27,6 +27,17 @@ export function NoHousesNotice() {
   );
 }
 
+export function NoRecipesNotice() {
+  return (
+    <div className="card space-y-2 text-sm">
+      <p className="font-medium text-gold">Todavía no hay recetas</p>
+      <p className="text-muted">
+        Ejecuta <code>pnpm sync-recipes</code> en el Mac para descargarlas de la API de Blizzard. Basta con hacerlo una vez (y tras cada parche).
+      </p>
+    </div>
+  );
+}
+
 export function Loading() {
   return <div className="card animate-pulse text-sm text-muted">Cargando…</div>;
 }

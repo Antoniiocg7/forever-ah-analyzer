@@ -26,6 +26,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/" className="py-1 hover:text-fg">
                 Precios
               </Link>
+              <Link href="/professions" className="py-1 hover:text-fg">
+                Profesiones
+              </Link>
               <Link href="/admin/houses" className="py-1 hover:text-fg">
                 Casas
               </Link>

@@ -8,13 +8,13 @@ import { REFERENCE_ITEMS } from "./reference-items";
 const CHUNK = 1000;
 const MAX_NEW_ITEMS_PER_RUN = 400;
 
-function chunks<T>(arr: T[], size: number): T[][] {
+export function chunks<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
 }
 
-async function must<T>(p: PromiseLike<{ data: T; error: { message: string } | null }>): Promise<T> {
+export async function must<T>(p: PromiseLike<{ data: T; error: { message: string } | null }>): Promise<T> {
   const { data, error } = await p;
   if (error) throw new Error(error.message);
   return data;
@@ -93,6 +93,46 @@ export async function ingestHouse(
   }
 }
 
+/** Consulta en static-forever los objetos que aún no están en `items` y los guarda. Lanza si falla la BD. */
+export async function storeItems(db: SupabaseClient, blizzard: BlizzardClient, ids: number[], limit = Infinity): Promise<number> {
+  // Los que ya están en `items` con source='missing' dieron 404: no se reintentan.
+  const known = new Set<number>();
+  for (const part of chunks(ids, 500)) {
+    const rows = await must(db.from("items").select("id").in("id", part));
+    for (const r of rows ?? []) known.add(r.id as number);
+  }
+  const todo = ids.filter((id) => !known.has(id)).slice(0, limit);
+
+  let done = 0;
+  for (const batch of chunks(todo, 10)) {
+    const rows = await Promise.all(
+      batch.map(async (id) => {
+        const item = await blizzard.item(id).catch(() => undefined);
+        if (item === undefined) return null; // error de red: se reintenta en la próxima ejecución
+        if (item === null) return { id, source: "missing" };
+        return {
+          id,
+          name_en: item.name ?? null,
+          quality: item.quality?.type ?? null,
+          vendor_sell: item.sell_price ?? null,
+          vendor_buy: item.purchase_price ?? null,
+          class: item.item_class?.name ?? null,
+          subclass: item.item_subclass?.name ?? null,
+          source: "blizzard",
+        };
+      }),
+    );
+    const valid = rows.filter((r) => r !== null);
+    // Dos upserts: PostgREST exige las mismas columnas en todas las filas de un lote.
+    const found = valid.filter((r) => r.source === "blizzard");
+    const missing = valid.filter((r) => r.source === "missing");
+    if (found.length) await must(db.from("items").upsert(found));
+    if (missing.length) await must(db.from("items").upsert(missing));
+    done += valid.length;
+  }
+  return done;
+}
+
 /** Rellena `items` con los objetos vistos en la subasta que aún no conocemos. */
 export async function syncItemNames(db: SupabaseClient, blizzard: BlizzardClient, houseIds: number[]): Promise<number> {
   try {
@@ -108,42 +148,7 @@ export async function syncItemNames(db: SupabaseClient, blizzard: BlizzardClient
     }
     if (seen.size === 0) return 0;
 
-    // Los que ya están en `items` con source='missing' dieron 404: no se reintentan.
-    const known = new Set<number>();
-    for (const part of chunks([...seen], 500)) {
-      const rows = await must(db.from("items").select("id").in("id", part));
-      for (const r of rows ?? []) known.add(r.id as number);
-    }
-    const todo = [...seen].filter((id) => !known.has(id)).slice(0, MAX_NEW_ITEMS_PER_RUN);
-
-    let done = 0;
-    for (const batch of chunks(todo, 10)) {
-      const rows = await Promise.all(
-        batch.map(async (id) => {
-          const item = await blizzard.item(id).catch(() => undefined);
-          if (item === undefined) return null; // error de red: se reintenta en la próxima ejecución
-          if (item === null) return { id, source: "missing" };
-          return {
-            id,
-            name_en: item.name ?? null,
-            quality: item.quality?.type ?? null,
-            vendor_sell: item.sell_price ?? null,
-            vendor_buy: item.purchase_price ?? null,
-            class: item.item_class?.name ?? null,
-            subclass: item.item_subclass?.name ?? null,
-            source: "blizzard",
-          };
-        }),
-      );
-      const valid = rows.filter((r) => r !== null);
-      // Dos upserts: PostgREST exige las mismas columnas en todas las filas de un lote.
-      const found = valid.filter((r) => r.source === "blizzard");
-      const missing = valid.filter((r) => r.source === "missing");
-      if (found.length) await must(db.from("items").upsert(found));
-      if (missing.length) await must(db.from("items").upsert(missing));
-      done += valid.length;
-    }
-    return done;
+    return await storeItems(db, blizzard, [...seen], MAX_NEW_ITEMS_PER_RUN);
   } catch (err) {
     await logError(db, null, "items", err);
     return 0;

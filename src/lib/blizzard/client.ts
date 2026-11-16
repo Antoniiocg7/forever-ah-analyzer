@@ -4,6 +4,10 @@ import {
   extractHouseIds,
   houseSchema,
   itemSchema,
+  professionIndexSchema,
+  professionSchema,
+  recipeSchema,
+  skillTierSchema,
   rawAuctionSchema,
   rulesetIndexSchema,
   type House,
@@ -159,5 +163,29 @@ export class BlizzardClient {
     if (res.status !== 200) return null;
     const parsed = itemSchema.safeParse(res.json);
     return parsed.success ? parsed.data : null;
+  }
+
+  /** GET a static-forever validado con un esquema. null si da 404 o el formato no encaja. */
+  private async staticGet<S extends z.ZodType>(path: string, schema: S): Promise<z.infer<S> | null> {
+    const res = await this.get(path, { namespace: "static" });
+    if (res.status !== 200) return null;
+    const parsed = schema.safeParse(res.json);
+    return parsed.success ? parsed.data : null;
+  }
+
+  async professions() {
+    return (await this.staticGet("/data/wow/profession/index", professionIndexSchema))?.professions ?? [];
+  }
+
+  profession(id: number) {
+    return this.staticGet(`/data/wow/profession/${id}`, professionSchema);
+  }
+
+  skillTier(professionId: number, tierId: number) {
+    return this.staticGet(`/data/wow/profession/${professionId}/skill-tier/${tierId}`, skillTierSchema);
+  }
+
+  recipe(id: number) {
+    return this.staticGet(`/data/wow/recipe/${id}`, recipeSchema);
   }
 }

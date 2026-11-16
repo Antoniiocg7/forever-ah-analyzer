@@ -57,6 +57,35 @@ export const itemSchema = z.object({
   item_subclass: z.object({ name: localized.optional() }).optional(),
 });
 
+const named = z.object({ id: z.number(), name: localized.optional() });
+
+export const professionIndexSchema = z.object({ professions: z.array(named).optional().default([]) });
+export const professionSchema = z.object({ id: z.number(), name: localized.optional(), skill_tiers: z.array(named).optional().default([]) });
+export const skillTierSchema = z.object({
+  name: localized.optional(),
+  categories: z
+    .array(z.object({ name: localized.optional(), recipes: z.array(named).optional().default([]) }))
+    .optional()
+    .default([]),
+});
+
+const quantity = z
+  .object({ value: z.number().optional(), minimum: z.number().optional(), maximum: z.number().optional() })
+  .transform((q) => q.value ?? (q.minimum !== undefined && q.maximum !== undefined ? (q.minimum + q.maximum) / 2 : (q.minimum ?? q.maximum ?? 1)));
+
+export const recipeSchema = z.object({
+  id: z.number(),
+  name: localized.optional(),
+  crafted_item: idRef.optional(),
+  alliance_crafted_item: idRef.optional(),
+  horde_crafted_item: idRef.optional(),
+  crafted_quantity: quantity.optional(),
+  reagents: z
+    .array(z.object({ reagent: idRef, quantity: z.number().optional().default(1) }))
+    .optional()
+    .default([]),
+});
+
 /** IDs conocidos (noviembre 2026) por si el índice cambia de forma. */
 export const KNOWN_HOUSE_IDS = [110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 123, 124, 125];
 
