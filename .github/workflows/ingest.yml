@@ -1,0 +1,30 @@
+name: Ingesta horaria
+
+on:
+  schedule:
+    - cron: "12 * * * *" # unos minutos después de la publicación horaria
+  workflow_dispatch:
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm ingest
+        env:
+          BLIZZARD_CLIENT_ID: ${{ secrets.BLIZZARD_CLIENT_ID }}
+          BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
+          BLIZZARD_REGION: eu
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

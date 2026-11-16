@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Forever AH Analyzer
 
-## Getting Started
+Web personal para analizar la casa de subastas de **World of Warcraft: Forever** (EU · PvP · Alianza).
+La especificación completa está en [CLAUDE.md](CLAUDE.md). Hecho hasta ahora: **Fase 0** (identificar la casa) y **Fase 1** (ingesta + explorador de precios).
 
-First, run the development server:
+## Puesta en marcha
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. **Blizzard**: crea un cliente en <https://develop.battle.net> y copia el client ID y el secret.
+2. **Supabase**: crea un proyecto y aplica `supabase/migrations/20261116000000_init.sql` (SQL Editor, o `supabase link` + `supabase db push`).
+3. Copia `.env.example` a `.env.local` y rellénalo.
+4. Descarga las 15 casas y marca la tuya:
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+   ```bash
+   pnpm discover
+   pnpm dev
+   ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+   Abre <http://localhost:3000/admin/houses>, compara los precios con los del juego y marca "Alliance · PvP" y "Blackwater · PvP".
+5. Primera ingesta (repítela cada hora para tener histórico):
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+   ```bash
+   pnpm ingest
+   ```
 
-## Learn More
+## Ingesta horaria
 
-To learn more about Next.js, take a look at the following resources:
+`.github/workflows/ingest.yml` ejecuta `pnpm ingest` cada hora. Necesita estos secretos en el repo de GitHub:
+`BLIZZARD_CLIENT_ID`, `BLIZZARD_CLIENT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+El resumen diario y el borrado de datos horarios de más de 7 días los hace `pg_cron` dentro de Supabase.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Comandos
 
-## Deploy on Vercel
+| Comando | Qué hace |
+| --- | --- |
+| `pnpm dev` | Web en local |
+| `pnpm discover` | Fase 0: descarga todas las casas y sus precios de referencia |
+| `pnpm ingest` | Ingesta de las casas marcadas |
+| `pnpm test` | Tests (Vitest) |
+| `pnpm typecheck` / `pnpm lint` | Comprobaciones |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Pendiente de confirmar
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Los IDs de los materiales de referencia (`src/lib/reference-items.ts`) son los de Classic.
+- La comisión de la casa neutral (Blackwater): `settings.ah_cut.neutral` está a `null`.
+- De dónde sacar nombres e iconos del ~43% de objetos que dan 404 en `static-forever`.
+- Ingesta en Edge Function o en GitHub Actions: hay que medir con datos reales (`pnpm ingest` imprime tiempo y memoria).
