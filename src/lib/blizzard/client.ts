@@ -1,8 +1,8 @@
 import { z } from "zod";
 import {
   auctionsResponseSchema,
-  extractHouseIds,
-  houseSchema,
+  extractHouses,
+  hrefSchema,
   itemSchema,
   professionIndexSchema,
   professionSchema,
@@ -10,7 +10,6 @@ import {
   skillTierSchema,
   rawAuctionSchema,
   rulesetIndexSchema,
-  type House,
   type TimeLeft,
 } from "./schemas";
 
@@ -101,31 +100,25 @@ export class BlizzardClient {
     return id;
   }
 
-  async houseIds(rulesetId: number): Promise<number[]> {
-    // La barra final es obligatoria.
+  /** Índice de casas: [{ id, name }]. La barra final de la URL es obligatoria. */
+  async houses(rulesetId: number): Promise<{ id: number; name: string | undefined }[]> {
     const res = await this.get(`/data/wow/ruleset/${rulesetId}/auctions/`, { namespace: "dynamic" });
-    return extractHouseIds(res.status === 200 ? res.json : null);
-  }
-
-  async house(rulesetId: number, houseId: number): Promise<House | null> {
-    const res = await this.get(`/data/wow/ruleset/${rulesetId}/auctions/${houseId}`, { namespace: "dynamic" });
-    if (res.status !== 200) return null;
-    const parsed = houseSchema.safeParse(res.json);
-    return parsed.success ? parsed.data : { id: houseId, name: undefined, auctions: undefined, commodities: undefined };
+    return extractHouses(res.status === 200 ? res.json : null);
   }
 
   /**
-   * Descarga commodities + subastas de objeto de una casa.
-   * Devuelve null si los commodities no han cambiado desde `ifModifiedSince`.
+   * Descarga las subastas de objeto (vienen dentro del documento de la casa) y los commodities.
+   * Devuelve null si la casa no ha cambiado desde `ifModifiedSince`.
    */
   async listings(
     rulesetId: number,
-    house: House,
+    houseId: number,
     ifModifiedSince?: string | null,
   ): Promise<{ listings: Listing[]; lastModified: string | null; skipped: number } | null> {
-    const base = `/data/wow/ruleset/${rulesetId}/auctions/${house.id}`;
-    const commodities = await this.get(`${base}/commodities`, { namespace: "dynamic", ifModifiedSince });
-    if (commodities.status === 304) return null;
+    const base = `/data/wow/ruleset/${rulesetId}/auctions/${houseId}`;
+    const house = await this.get(base, { namespace: "dynamic", ifModifiedSince });
+    if (house.status === 304) return null;
+    if (house.status === 404) throw new Error("La casa no existe en la API");
 
     const out: Listing[] = [];
     let skipped = 0;
@@ -139,22 +132,27 @@ export class BlizzardClient {
           continue;
         }
         const { id, item, quantity, unit_price, buyout, time_left } = a.data;
+        // `buyout` es el precio del lote entero; `unit_price` (commodities) ya es por unidad.
         const unitPrice =
           unit_price && unit_price > 0 ? unit_price : buyout && buyout > 0 ? Math.round(buyout / quantity) : null;
         out.push({ auctionId: id, itemId: item, qty: quantity, unitPrice, timeLeft: time_left });
       }
     };
 
-    if (commodities.status === 200) absorb(commodities.json);
-    if (house.auctions?.href) {
-      const auctions = await this.get(house.auctions.href, { namespace: "dynamic" });
+    // Algunas casas (112, 115, 118) no traen `auctions`; por si acaso, también se acepta un enlace.
+    const doc = house.json as { auctions?: unknown } | null;
+    const link = hrefSchema.safeParse(doc?.auctions);
+    if (link.success) {
+      const auctions = await this.get(link.data.href, { namespace: "dynamic" });
       if (auctions.status === 200) absorb(auctions.json);
+    } else {
+      absorb(doc);
     }
-    return {
-      listings: out,
-      lastModified: commodities.status === 200 ? commodities.lastModified : null,
-      skipped,
-    };
+
+    const commodities = await this.get(`${base}/commodities`, { namespace: "dynamic" });
+    if (commodities.status === 200) absorb(commodities.json);
+
+    return { listings: out, lastModified: house.lastModified, skipped };
   }
 
   /** Datos estáticos de un objeto. null si da 404 (pasa con ~43% de los IDs). */

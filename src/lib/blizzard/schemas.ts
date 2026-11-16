@@ -33,15 +33,7 @@ const localized = z.union([
   z.record(z.string(), z.string()).transform((r) => r.en_US ?? r.en_GB ?? Object.values(r)[0] ?? ""),
 ]);
 
-const href = z.object({ href: z.string() }).optional();
-
-export const houseSchema = z.object({
-  id: z.number(),
-  name: localized.optional(),
-  auctions: href, // algunas casas (112, 115, 118) no lo traen
-  commodities: href,
-});
-export type House = z.infer<typeof houseSchema>;
+export const hrefSchema = z.object({ href: z.string() });
 
 export const rulesetIndexSchema = z.object({
   rulesets: z.array(z.object({ id: z.number(), name: localized.optional() })).optional().default([]),
@@ -89,18 +81,19 @@ export const recipeSchema = z.object({
 /** IDs conocidos (noviembre 2026) por si el índice cambia de forma. */
 export const KNOWN_HOUSE_IDS = [110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 123, 124, 125];
 
-/** Saca los IDs de casa del índice sin asumir el nombre de la propiedad. */
-export function extractHouseIds(index: unknown): number[] {
+/** Saca las casas del índice sin asumir el nombre de la propiedad. */
+export function extractHouses(index: unknown): { id: number; name: string | undefined }[] {
   if (index && typeof index === "object") {
     for (const value of Object.values(index as Record<string, unknown>)) {
       if (!Array.isArray(value)) continue;
-      const ids = value
-        .map((v) => (v && typeof v === "object" ? (v as { id?: unknown }).id : undefined))
-        .filter((id): id is number => typeof id === "number");
-      if (ids.length > 0) return ids;
+      const houses = value.flatMap((v) => {
+        const parsed = z.object({ id: z.number(), name: localized.optional() }).safeParse(v);
+        return parsed.success ? [{ id: parsed.data.id, name: parsed.data.name }] : [];
+      });
+      if (houses.length > 0) return houses;
     }
   }
-  return KNOWN_HOUSE_IDS;
+  return KNOWN_HOUSE_IDS.map((id) => ({ id, name: undefined }));
 }
 
 export function factionFromName(name: string | undefined): "alliance" | "horde" | "neutral" | "unknown" {

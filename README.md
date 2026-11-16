@@ -42,8 +42,13 @@ El resumen diario y el borrado de datos horarios de más de 7 días los hace `pg
 
 ## Pendiente de confirmar
 
-- Los IDs de los materiales de referencia (`src/lib/reference-items.ts`) son los de Classic.
 - La comisión de la casa neutral (Blackwater): `settings.ah_cut.neutral` está a `null`.
 - De dónde sacar nombres e iconos del ~43% de objetos que dan 404 en `static-forever`.
-- El formato de las recetas en `static-forever` (se ha supuesto igual al de retail) y que falten el nivel de habilidad y los colores de skill-up.
-- Ingesta en Edge Function o en GitHub Actions: hay que medir con datos reales (`pnpm ingest` imprime tiempo y memoria).
+- La API de recetas no da el nivel de habilidad ni los colores de skill-up.
+- Si `buyout` en las subastas de objetos es el precio del lote entero (se ha supuesto que sí, como en Classic).
+
+## Medido con datos reales (16-11-2026)
+
+- Una casa trae ~273.000 subastas (objetos + commodities) y unos 6.700 objetos distintos.
+- Descargarla y agregarla tarda ~3 s y usa ~320 MB de memoria: no cabe en una Edge Function, así que la ingesta se queda en GitHub Actions.
+- `If-Modified-Since` funciona (devuelve 304) y los IDs de objeto coinciden con los de Classic.

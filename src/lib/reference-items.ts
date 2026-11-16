@@ -1,8 +1,4 @@
-/**
- * Materiales comunes para identificar la casa correcta (Fase 0).
- * OJO: son los IDs de WoW Classic. Está SIN CONFIRMAR que Forever use los mismos;
- * si en /admin/houses salen vacíos o con precios raros, hay que corregirlos aquí.
- */
+/** Materiales comunes para identificar la casa correcta (Fase 0). IDs comprobados contra la API de Forever. */
 export const REFERENCE_ITEMS: ReadonlyArray<{ id: number; name: string }> = [
   { id: 2770, name: "Copper Ore" },
   { id: 2840, name: "Copper Bar" },

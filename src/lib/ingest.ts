@@ -39,11 +39,8 @@ export async function ingestHouse(
     const last = await must(
       db.from("snapshots").select("last_modified_header").eq("house_id", houseId).order("fetched_at", { ascending: false }).limit(1),
     );
-    const house = await blizzard.house(rulesetId, houseId);
-    if (!house) throw new Error("La casa no existe en la API");
-
     const fetchedAt = new Date();
-    const result = await blizzard.listings(rulesetId, house, last?.[0]?.last_modified_header ?? null);
+    const result = await blizzard.listings(rulesetId, houseId, last?.[0]?.last_modified_header ?? null);
     if (!result) return { houseId, status: "not-modified" };
     const { listings, lastModified, skipped } = result;
     if (skipped > 0) await logError(db, houseId, "parse", `${skipped} subastas con formato inesperado`);
@@ -157,16 +154,15 @@ export async function syncItemNames(db: SupabaseClient, blizzard: BlizzardClient
 
 /** Fase 0: descarga todas las casas y guarda el precio mínimo de los materiales de referencia. */
 export async function discoverHouses(db: SupabaseClient, blizzard: BlizzardClient, rulesetId: number) {
-  const ids = await blizzard.houseIds(rulesetId);
+  const houses = await blizzard.houses(rulesetId);
   const refIds = new Set(REFERENCE_ITEMS.map((i) => i.id));
   const summary: { id: number; name: string; auctions: number }[] = [];
 
-  for (const id of ids) {
+  for (const house of houses) {
+    const id = house.id;
     try {
-      const house = await blizzard.house(rulesetId, id);
-      if (!house) continue;
       const name = house.name ?? `House ${id}`;
-      const result = await blizzard.listings(rulesetId, house);
+      const result = await blizzard.listings(rulesetId, id);
       const listings = result?.listings ?? [];
       const aggregates = aggregateListings(listings.filter((l) => refIds.has(l.itemId)));
       const now = new Date().toISOString();
