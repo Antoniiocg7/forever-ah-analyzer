@@ -2,7 +2,7 @@ name: Ingesta horaria
 
 on:
   schedule:
-    - cron: "12 * * * *" # unos minutos después de la publicación horaria
+    - cron: "27 * * * *" # Blizzard publicó a y 19 (visto el 16-11-2026); margen de unos minutos
   workflow_dispatch:
 
 concurrency:
