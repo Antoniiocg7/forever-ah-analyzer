@@ -4,7 +4,7 @@ export type Market = {
   min: number | null;
   /** Mercado ahora (media del 15% de unidades más baratas). */
   market: number | null;
-  /** Media del mercado de los últimos 7 días. */
+  /** Mediana del mercado de los últimos 7 días. */
   market7d: number | null;
   qty: number;
   numAuctions: number;
@@ -88,7 +88,7 @@ export type CraftResult = {
   cost: number | null;
   /** Coste de los materiales que sí tienen precio. */
   knownCost: number;
-  /** Precio unitario de venta prudente: el menor entre el mínimo actual y la media de 7 días. */
+  /** Precio unitario de venta prudente: el menor entre el mínimo actual y la mediana de 7 días. */
   sellUnit: number | null;
   /** Ingreso neto vendiendo en la subasta (ya sin comisión). */
   ahRevenue: number | null;
@@ -108,7 +108,7 @@ export type DepositSettings = { deposit_min: number; pct: Record<string, number>
 /**
  * Economía de fabricar una receta una vez.
  * - Materiales: lo más barato entre subasta (mercado actual), vendedor y fabricarlo tú (`crafted`).
- * - Venta: el menor entre el mínimo actual y la media de 7 días, menos la comisión; o a un vendedor
+ * - Venta: el menor entre el mínimo actual y la mediana de 7 días, menos la comisión; o a un vendedor
  *   si paga más. Usar el menor evita fiarse de un único listado caro.
  * - El depósito no se resta (se recupera al vender); se muestra aparte.
  */

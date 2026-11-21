@@ -34,7 +34,7 @@ export type LatestPriceRow = {
   p15_market: number;
   qty: number;
   num_auctions: number;
-  /** Media del precio de mercado de los últimos 7 días. */
+  /** Mediana del precio de mercado de los últimos 7 días. */
   market_7d: number | null;
   /** ESTIMACIÓN de ventas por día (media de 7 días). */
   sold_per_day: number | null;

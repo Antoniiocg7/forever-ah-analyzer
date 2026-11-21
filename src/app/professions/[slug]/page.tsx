@@ -149,7 +149,7 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
           profesiones ({settings.myProfessions.join(", ") || "ninguna configurada"}).
         </p>
         <p>
-          <b>Venta</b>: el menor entre el mínimo actual y la media de 7 días, menos la comisión del {Math.round(settings.cut * 100)}%; o a un
+          <b>Venta</b>: el menor entre el mínimo actual y la mediana de 7 días, menos la comisión del {Math.round(settings.cut * 100)}%; o a un
           vendedor si paga más. El depósito no se resta porque se recupera al vender.
         </p>
         <p>
@@ -243,7 +243,7 @@ function RecipeItem({
         ) : (
           <dl className="space-y-1 border-t border-line pt-2">
             <Row label="Precio de venta (unidad)" value={calc.sellUnit === null ? "sin datos" : formatMoney(calc.sellUnit)} />
-            {calc.product && <Row label="Ahora: mínimo · media 7 días" value={`${formatMoney(calc.product.min)} · ${formatMoney(calc.product.market7d)}`} />}
+            {calc.product && <Row label="Mínimo ahora · mediana 7 d" value={`${formatMoney(calc.product.min)} · ${formatMoney(calc.product.market7d)}`} />}
             {calc.product && <Row label="En venta" value={`${calc.product.qty} uds en ${calc.product.numAuctions} subastas`} />}
             <Row label="Vender en la subasta (neto)" value={calc.ahRevenue === null ? "sin datos" : formatMoney(calc.ahRevenue)} />
             <Row label="Vender a un vendedor" value={formatMoney(calc.vendorRevenue)} />

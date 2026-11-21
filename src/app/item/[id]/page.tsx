@@ -47,7 +47,7 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
   const stats: { label: string; value: string }[] = [
     { label: "Mínimo ahora", value: formatMoney(latest?.min_buyout) },
     { label: "Mercado ahora", value: formatMoney(latest?.p15_market) },
-    { label: "Media 7 días", value: formatMoney(latest?.market_7d) },
+    { label: "Mediana 7 días", value: formatMoney(latest?.market_7d) },
     { label: "En venta", value: latest ? `${latest.qty.toLocaleString("es-ES")} uds · ${latest.num_auctions} subastas` : "—" },
     { label: "Ventas/día (est.)", value: soldPerDay === null ? "sin datos aún" : `≈ ${soldPerDay.toLocaleString("es-ES")}` },
     {

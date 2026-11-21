@@ -55,7 +55,7 @@ describe("craftCosts", () => {
 });
 
 describe("craftEconomics", () => {
-  it("usa el material fabricado si es más barato y vende al menor entre mínimo y media de 7 días", () => {
+  it("usa el material fabricado si es más barato y vende al menor entre mínimo y mediana de 7 días", () => {
     const crafted = craftCosts([smeltBar], markets);
     const r = craftEconomics(belt, markets, crafted, 0.05, { deposit_min: 100, pct: { "2": 0.05, "24": 0.6 } });
     expect(r.lines[0].acquire).toMatchObject({ via: "craft", unit: 100 });

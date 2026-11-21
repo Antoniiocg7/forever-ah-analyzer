@@ -75,7 +75,7 @@ type ItemRow = {
 type PriceRow = { item_id: number; min_buyout: number; p15_market: number; qty: number; num_auctions: number; fetched_at: string };
 type StatRow = { item_id: number; market_7d: number | null; sold_per_day: number | null };
 
-/** Mercado (precio actual, media de 7 días, ventas estimadas, vendedor) e info de un conjunto de objetos. */
+/** Mercado (precio actual, mediana de 7 días, ventas estimadas, vendedor) e info de un conjunto de objetos. */
 export async function marketData(houseId: number, itemIds: number[]) {
   const markets = new Map<number, Market>();
   const info = new Map<number, ItemInfo>();
