@@ -1,60 +1,111 @@
 import { describe, expect, it } from "vitest";
-import { craftEconomics, type Price } from "./craft";
+import { buyPrice, craftCosts, craftEconomics, liquidityOf, type Market, type RecipeInput } from "./craft";
 
-const ORE = 2770;
-const BAR = 2840;
-const STONE = 2835;
-const BELT = 2851;
+const ORE = 10;
+const BAR = 11;
+const COAL = 12;
+const STEEL = 13;
+const BELT = 14;
+const STONE = 15;
 
-const prices = new Map<number, Price>([
-  [ORE, { min: 40, market: 50 }],
-  [BAR, { min: 200, market: 220 }],
-  [BELT, { min: 3000, market: 3500 }],
+const m = (p: Partial<Market>): Market => ({
+  min: null,
+  market: null,
+  market7d: null,
+  qty: 100,
+  numAuctions: 20,
+  soldPerDay: 50,
+  vendorBuy: null,
+  vendorSell: null,
+  ...p,
+});
+
+const markets = new Map<number, Market>([
+  [ORE, m({ min: 40, market: 50 })],
+  [BAR, m({ min: 200, market: 220 })],
+  [COAL, m({ min: 600, market: 700, vendorBuy: 500 })],
+  [BELT, m({ min: 3000, market: 3500, market7d: 3200 })],
 ]);
-const noVendor = new Map<number, number>();
+
+const smeltBar: RecipeInput = { id: 1, name: "Smelt Bar", yieldsItem: BAR, yieldsQty: 1, reagents: [{ itemId: ORE, qty: 2 }] };
+const steel: RecipeInput = { id: 2, name: "Smelt Steel", yieldsItem: STEEL, yieldsQty: 1, reagents: [{ itemId: BAR, qty: 1 }, { itemId: COAL, qty: 1 }] };
+const belt: RecipeInput = { id: 3, name: "Belt", yieldsItem: BELT, yieldsQty: 1, reagents: [{ itemId: BAR, qty: 6 }] };
+
+describe("buyPrice", () => {
+  it("elige el vendedor si es más barato que la subasta", () => {
+    expect(buyPrice(markets.get(COAL))).toEqual({ unit: 500, via: "vendor" });
+    expect(buyPrice(markets.get(ORE))).toEqual({ unit: 50, via: "ah" });
+    expect(buyPrice(undefined)).toBeNull();
+  });
+});
+
+describe("craftCosts", () => {
+  it("encadena recetas: la barra sale más barata fundiendo y el acero usa esa barra", () => {
+    const costs = craftCosts([steel, smeltBar], markets);
+    expect(costs.get(BAR)).toEqual({ unit: 100, via: "craft", recipeId: 1 });
+    // acero = barra fundida (100) + carbón de vendedor (500), aunque la receta vaya antes en la lista
+    expect(costs.get(STEEL)?.unit).toBe(600);
+  });
+
+  it("no cuelga con recetas en ciclo", () => {
+    const a: RecipeInput = { id: 8, name: "A", yieldsItem: ORE, yieldsQty: 1, reagents: [{ itemId: BAR, qty: 1 }] };
+    const costs = craftCosts([smeltBar, a], markets);
+    expect(costs.get(BAR)?.unit).toBe(100);
+  });
+});
 
 describe("craftEconomics", () => {
-  it("coste a precio de mercado y venta al mínimo menos la comisión", () => {
-    const r = craftEconomics({ yieldsItem: BELT, yieldsQty: 1, reagents: [{ itemId: BAR, qty: 6 }] }, prices, noVendor, 0.05);
-    expect(r.cost).toBe(1320);
+  it("usa el material fabricado si es más barato y vende al menor entre mínimo y media de 7 días", () => {
+    const crafted = craftCosts([smeltBar], markets);
+    const r = craftEconomics(belt, markets, crafted, 0.05, { deposit_min: 100, pct: { "2": 0.05, "24": 0.6 } });
+    expect(r.lines[0].acquire).toMatchObject({ via: "craft", unit: 100 });
+    expect(r.cost).toBe(600);
+    expect(r.sellUnit).toBe(3000);
     expect(r.ahRevenue).toBe(2850);
-    expect(r.sellVia).toBe("ah");
-    expect(r.profit).toBe(1530);
-    expect(r.margin).toBeCloseTo(1530 / 1320);
+    expect(r.profit).toBe(2250);
+    expect(r.liquidity).toBe("ok");
   });
 
-  it("multiplica el ingreso por las unidades fabricadas y puede dar pérdidas", () => {
-    const r = craftEconomics({ yieldsItem: ORE, yieldsQty: 2, reagents: [{ itemId: BAR, qty: 1 }] }, prices, noVendor, 0.05);
-    expect(r.ahRevenue).toBe(76);
-    expect(r.profit).toBe(76 - 220);
+  it("no usa la propia receta como fuente de su material", () => {
+    const crafted = craftCosts([smeltBar], markets);
+    const r = craftEconomics(smeltBar, markets, crafted, 0.05);
+    expect(r.lines[0].acquire?.via).toBe("ah");
   });
 
-  it("sin precio de un material no hay coste ni beneficio, pero sí coste parcial", () => {
+  it("sin precio de un material: coste parcial y sin beneficio", () => {
     const r = craftEconomics(
-      { yieldsItem: BELT, yieldsQty: 1, reagents: [{ itemId: BAR, qty: 2 }, { itemId: STONE, qty: 1 }] },
-      prices,
-      noVendor,
+      { id: 4, name: "X", yieldsItem: BELT, yieldsQty: 1, reagents: [{ itemId: BAR, qty: 2 }, { itemId: STONE, qty: 1 }] },
+      markets,
+      new Map(),
       0.05,
     );
     expect(r.cost).toBeNull();
     expect(r.knownCost).toBe(440);
-    expect(r.missing).toEqual([STONE]);
     expect(r.profit).toBeNull();
-    expect(r.ahRevenue).toBe(2850);
   });
 
-  it("elige el vendedor si paga más que la subasta, o si no hay nada en la subasta", () => {
-    const better = craftEconomics({ yieldsItem: BELT, yieldsQty: 1, reagents: [{ itemId: BAR, qty: 1 }] }, prices, new Map([[BELT, 4000]]), 0.05);
-    expect(better.sellVia).toBe("vendor");
-    expect(better.profit).toBe(4000 - 220);
-
-    const only = craftEconomics({ yieldsItem: STONE, yieldsQty: 1, reagents: [{ itemId: ORE, qty: 1 }] }, prices, new Map([[STONE, 10]]), 0.05);
-    expect(only.sellVia).toBe("vendor");
-    expect(only.profit).toBe(10 - 50);
+  it("vende al vendedor si paga más, y lo multiplica por las unidades fabricadas", () => {
+    const vendorMarkets = new Map(markets).set(STONE, m({ vendorSell: 300, qty: 0, numAuctions: 0, soldPerDay: null }));
+    const r = craftEconomics({ id: 5, name: "Y", yieldsItem: STONE, yieldsQty: 2, reagents: [{ itemId: ORE, qty: 1 }] }, vendorMarkets, new Map(), 0.05);
+    expect(r.sellVia).toBe("vendor");
+    expect(r.revenue).toBe(600);
+    expect(r.profit).toBe(550);
+    expect(r.liquidity).toBe("ok");
   });
 
-  it("receta sin objeto fabricado o sin materiales: sin beneficio", () => {
-    expect(craftEconomics({ yieldsItem: null, yieldsQty: 1, reagents: [{ itemId: ORE, qty: 1 }] }, prices, noVendor, 0.05).profit).toBeNull();
-    expect(craftEconomics({ yieldsItem: BELT, yieldsQty: 1, reagents: [] }, prices, noVendor, 0.05).cost).toBeNull();
+  it("el depósito usa el precio de vendedor y respeta el mínimo", () => {
+    const withVendor = new Map(markets).set(BELT, m({ min: 3000, vendorSell: 1000 }));
+    const r = craftEconomics(belt, withVendor, new Map(), 0.05, { deposit_min: 100, pct: { "2": 0.05, "24": 0.6 } });
+    expect(r.deposit).toEqual({ h2: 100, h24: 600 });
+  });
+});
+
+describe("liquidityOf", () => {
+  it("clasifica el mercado del producto", () => {
+    expect(liquidityOf(null)).toBe("none");
+    expect(liquidityOf(m({ qty: 0, soldPerDay: null }))).toBe("none");
+    expect(liquidityOf(m({ numAuctions: 1, soldPerDay: 0 }))).toBe("thin");
+    expect(liquidityOf(m({ numAuctions: 1, soldPerDay: 3 }))).toBe("ok");
+    expect(liquidityOf(m({ numAuctions: 9, soldPerDay: null }))).toBe("unknown");
   });
 });

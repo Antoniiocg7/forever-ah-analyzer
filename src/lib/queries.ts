@@ -35,33 +35,57 @@ export async function latestPrice(houseId: number, itemId: number): Promise<Late
   );
 }
 
-export type ItemRow = { id: number; name_en: string | null; quality: string | null; vendor_sell: number | null; class: string | null; subclass: string | null };
+export type ItemRow = {
+  id: number;
+  name_en: string | null;
+  quality: string | null;
+  icon_url: string | null;
+  vendor_sell: number | null;
+  vendor_buy: number | null;
+  vendor_sold: boolean;
+  class: string | null;
+  subclass: string | null;
+};
 
 export async function itemById(itemId: number): Promise<ItemRow | null> {
   return unwrap(
-    await supabaseAdmin().from("items").select("id, name_en, quality, vendor_sell, class, subclass").eq("id", itemId).maybeSingle(),
+    await supabaseAdmin().from("items").select("id, name_en, quality, icon_url, vendor_sell, vendor_buy, vendor_sold, class, subclass").eq("id", itemId).maybeSingle(),
   );
 }
 
-export type PricePoint = { t: number; min: number; market: number; qty: number; sold: number | null };
+export type PricePoint = { t: number; min: number | null; market: number | null; qty: number; sold: number | null };
 
+/** Serie horaria de los últimos 7 días (hora de los datos, no de la descarga). */
 export async function hourlySeries(houseId: number, itemId: number): Promise<PricePoint[]> {
-  type Row = { min_buyout: number; p15_market: number; qty: number; est_sold: number | null; snapshots: { fetched_at: string } };
+  const since = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+  const snaps = unwrap<{ id: number; fetched_at: string; data_at: string | null }[]>(
+    await supabaseAdmin().from("snapshots").select("id, fetched_at, data_at").eq("house_id", houseId).gte("fetched_at", since).limit(500),
+  );
+  if (snaps.length === 0) return [];
+  const time = new Map(snaps.map((s) => [s.id, new Date(s.data_at ?? s.fetched_at).getTime()]));
+  type Row = { snapshot_id: number; min_buyout: number | null; p15_market: number | null; qty: number; est_sold: number | null };
   const rows = unwrap<Row[]>(
-    (await supabaseAdmin()
+    await supabaseAdmin()
       .from("item_prices_hourly")
-      .select("min_buyout, p15_market, qty, est_sold, snapshots!inner(house_id, fetched_at)")
+      .select("snapshot_id, min_buyout, p15_market, qty, est_sold")
       .eq("item_id", itemId)
-      .eq("snapshots.house_id", houseId)
-      .limit(400)) as never,
+      .in("snapshot_id", [...time.keys()]),
   );
   return rows
-    .map((r) => ({ t: new Date(r.snapshots.fetched_at).getTime(), min: r.min_buyout, market: r.p15_market, qty: r.qty, sold: r.est_sold }))
+    .map((r) => ({ t: time.get(r.snapshot_id)!, min: r.min_buyout, market: r.p15_market, qty: r.qty, sold: r.est_sold }))
     .sort((a, b) => a.t - b.t);
 }
 
+/** Horas desde la última ingesta, para avisar si se ha parado. null si nunca ha habido ninguna. */
+export async function hoursSinceLastIngest(): Promise<number | null> {
+  const rows = unwrap<{ fetched_at: string }[]>(
+    await supabaseAdmin().from("snapshots").select("fetched_at").order("fetched_at", { ascending: false }).limit(1),
+  );
+  return rows[0] ? (Date.now() - new Date(rows[0].fetched_at).getTime()) / 3_600_000 : null;
+}
+
 export async function dailySeries(houseId: number, itemId: number): Promise<PricePoint[]> {
-  type Row = { day: string; min: number; avg_market: number; avg_qty: number; est_sold: number | null };
+  type Row = { day: string; min: number | null; avg_market: number | null; avg_qty: number; est_sold: number | null };
   const rows = unwrap<Row[]>(
     await supabaseAdmin()
       .from("item_prices_daily")

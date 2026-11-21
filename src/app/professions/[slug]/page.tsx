@@ -1,15 +1,25 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { HouseTabs } from "@/components/HouseTabs";
+import { ItemIcon } from "@/components/ItemIcon";
 import { Loading, NoHousesNotice, NoRecipesNotice, SetupNotice } from "@/components/notices";
 import { isConfigured } from "@/lib/env";
 import { formatMoney } from "@/lib/money";
-import { craftEconomics, type CraftResult } from "@/lib/professions/craft";
-import { ahCutFor, itemData, recipesFor, type RecipeRow } from "@/lib/professions/queries";
+import { craftCosts, craftEconomics, type CraftResult, type Liquidity } from "@/lib/professions/craft";
+import { economySettings, marketData, recipesFor, toRecipeInput, type ItemInfo, type RecipeRow } from "@/lib/professions/queries";
 import { trackedHouses } from "@/lib/queries";
 
 const SORTS = { profit: "Beneficio", margin: "Margen", cost: "Coste", name: "Nombre" } as const;
 type Sort = keyof typeof SORTS;
+
+const LIQUIDITY: Record<Liquidity, { label: string; className: string } | null> = {
+  ok: null,
+  unknown: null,
+  thin: { label: "poco mercado", className: "border-bad text-bad" },
+  none: { label: "sin mercado", className: "border-line text-muted" },
+};
+
+const VIA = { ah: "subasta", vendor: "vendedor", craft: "fabricando" } as const;
 
 export default function Page(props: PageProps<"/professions/[slug]">) {
   return (
@@ -45,38 +55,45 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
   const house = houses.find((h) => String(h.id) === sp.house) ?? houses[0];
   const sort: Sort = typeof sp.sort === "string" && sp.sort in SORTS ? (sp.sort as Sort) : "profit";
   const q = typeof sp.q === "string" ? sp.q.trim() : "";
+  const reliable = sp.fiables === "1";
+
+  const settings = await economySettings(house.faction);
+  // Para abaratar materiales se pueden fabricar con tus profesiones (p. ej. fundir barras).
+  const craftable = await recipesFor([...new Set([...settings.myProfessions, slug])]);
+  const craftInputs = craftable.map(toRecipeInput);
 
   const itemIds = new Set<number>();
-  for (const r of recipes) {
+  for (const r of [...recipes, ...craftable]) {
     if (r.yields_item !== null) itemIds.add(r.yields_item);
     for (const g of r.recipe_reagents) itemIds.add(g.item_id);
   }
-  const [{ prices, vendorSell, info, updatedAt }, { cut, confirmed }] = await Promise.all([itemData(house.id, [...itemIds]), ahCutFor(house.faction)]);
+  const { markets, info, updatedAt } = await marketData(house.id, [...itemIds]);
+  const crafted = craftCosts(craftInputs, markets);
+  const recipeName = new Map(craftable.map((r) => [r.id, r.name_en]));
 
-  const rows = recipes
-    .filter((r) => !q || r.name_en.toLowerCase().includes(q.toLowerCase()))
-    .map((recipe) => ({
-      recipe,
-      calc: craftEconomics(
-        { yieldsItem: recipe.yields_item, yieldsQty: Number(recipe.yields_qty), reagents: recipe.recipe_reagents.map((g) => ({ itemId: g.item_id, qty: g.qty })) },
-        prices,
-        vendorSell,
-        cut,
-      ),
-    }));
+  const all = recipes.map((recipe) => ({
+    recipe,
+    calc: craftEconomics(toRecipeInput(recipe), markets, crafted, settings.cut, settings.deposit),
+  }));
+  const rows = all.filter(
+    ({ recipe, calc }) =>
+      (!q || recipe.name_en.toLowerCase().includes(q.toLowerCase())) &&
+      (!reliable || (calc.profit !== null && calc.profit > 0 && (calc.liquidity === "ok" || calc.liquidity === "unknown"))),
+  );
 
   if (sort === "name") rows.sort((a, b) => a.recipe.name_en.localeCompare(b.recipe.name_en));
   else if (sort === "cost") rows.sort(byNumber((c) => c.cost, 1));
   else if (sort === "margin") rows.sort(byNumber((c) => c.margin, -1));
   else rows.sort(byNumber((c) => c.profit, -1));
 
-  const profitable = rows.filter((r) => (r.calc.profit ?? 0) > 0).length;
-  const href = (over: { house?: number; sort?: Sort }) => {
+  const profitable = all.filter((r) => (r.calc.profit ?? 0) > 0).length;
+  const href = (over: { house?: number; sort?: Sort; fiables?: boolean }) => {
     const p = new URLSearchParams({ house: String(over.house ?? house.id), sort: over.sort ?? sort });
     if (q) p.set("q", q);
+    if (over.fiables ?? reliable) p.set("fiables", "1");
     return `/professions/${slug}?${p}`;
   };
-  const itemName = (id: number) => info.get(id)?.name ?? `Objeto #${id}`;
+  const chip = (active: boolean) => `min-h-9 shrink-0 rounded-full border px-3 py-1.5 ${active ? "border-gold text-gold" : "border-line text-muted"}`;
 
   return (
     <div className="space-y-4">
@@ -91,6 +108,7 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
       <form action={`/professions/${slug}`} className="flex gap-2">
         <input type="hidden" name="house" value={house.id} />
         <input type="hidden" name="sort" value={sort} />
+        {reliable && <input type="hidden" name="fiables" value="1" />}
         <input className="input" type="search" name="q" defaultValue={q} placeholder="Buscar receta" enterKeyHint="search" />
         <button className="btn shrink-0">Buscar</button>
       </form>
@@ -98,34 +116,47 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
       <HouseTabs houses={houses} current={house.id} hrefFor={(id) => href({ house: id })} />
 
       <div className="flex gap-2 overflow-x-auto text-sm">
+        <Link href={href({ fiables: !reliable })} className={chip(reliable)} aria-pressed={reliable}>
+          Solo rentables con mercado
+        </Link>
         {(Object.keys(SORTS) as Sort[]).map((s) => (
-          <Link key={s} href={href({ sort: s })} className={`min-h-9 shrink-0 rounded-full border px-3 py-1.5 ${s === sort ? "border-gold text-gold" : "border-line text-muted"}`}>
+          <Link key={s} href={href({ sort: s })} className={chip(s === sort)}>
             {SORTS[s]}
           </Link>
         ))}
       </div>
 
-      {!confirmed && (
+      {!settings.cutConfirmed && (
         <p className="card text-sm text-bad">La comisión de venta de esta casa está sin confirmar: el beneficio se calcula con un 5% provisional.</p>
       )}
-      {prices.size === 0 && <p className="card text-sm text-muted">Aún no hay precios de esta casa. Ejecuta pnpm ingest.</p>}
+      {!updatedAt && <p className="card text-sm text-muted">Aún no hay precios de esta casa. Ejecuta pnpm ingest.</p>}
 
       {rows.length === 0 ? (
-        <p className="card text-sm text-muted">Ninguna receta coincide con “{q}”.</p>
+        <p className="card text-sm text-muted">{q ? `Ninguna receta coincide con “${q}”.` : "Ninguna receta cumple el filtro ahora mismo."}</p>
       ) : (
         <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
           {rows.map(({ recipe, calc }) => (
             <li key={recipe.id}>
-              <RecipeItem recipe={recipe} calc={calc} houseId={house.id} itemName={itemName} quality={recipe.yields_item === null ? null : (info.get(recipe.yields_item)?.quality ?? null)} prices={prices} />
+              <RecipeItem recipe={recipe} calc={calc} houseId={house.id} info={info} recipeName={recipeName} />
             </li>
           ))}
         </ul>
       )}
 
-      <p className="text-xs text-muted">
-        Coste: materiales comprados al precio de mercado (media del 15% más barato). Beneficio: vender al mínimo actual menos la
-        comisión del {Math.round(cut * 100)}%, o a un vendedor si paga más. No incluye el depósito de publicación.
-      </p>
+      <div className="space-y-1 text-xs text-muted">
+        <p>
+          <b>Coste</b>: cada material al precio más bajo entre la subasta (mercado actual), un vendedor y fabricarlo tú con tus
+          profesiones ({settings.myProfessions.join(", ") || "ninguna configurada"}).
+        </p>
+        <p>
+          <b>Venta</b>: el menor entre el mínimo actual y la media de 7 días, menos la comisión del {Math.round(settings.cut * 100)}%; o a un
+          vendedor si paga más. El depósito no se resta porque se recupera al vender.
+        </p>
+        <p>
+          <b>Poco mercado</b>: el producto tiene 1–2 subastas y menos de una venta al día estimada; su precio puede ser el de un solo
+          vendedor.
+        </p>
+      </div>
     </div>
   );
 }
@@ -134,30 +165,39 @@ function RecipeItem({
   recipe,
   calc,
   houseId,
-  itemName,
-  quality,
-  prices,
+  info,
+  recipeName,
 }: {
   recipe: RecipeRow;
   calc: CraftResult;
   houseId: number;
-  itemName: (id: number) => string;
-  quality: string | null;
-  prices: ReadonlyMap<number, { min: number; market: number }>;
+  info: ReadonlyMap<number, ItemInfo>;
+  recipeName: ReadonlyMap<number, string>;
 }) {
   const profitClass = calc.profit === null ? "text-muted" : calc.profit > 0 ? "text-good" : "text-bad";
   const qty = Number(recipe.yields_qty);
-  const meta = [recipe.category, recipe.tier, recipe.skill_req ? `nivel ${recipe.skill_req}` : null].filter(Boolean).join(" · ");
+  const product = recipe.yields_item === null ? null : info.get(recipe.yields_item);
+  const itemName = (id: number) => info.get(id)?.name ?? `Objeto #${id}`;
+  const badge = LIQUIDITY[calc.liquidity];
+  const meta = [recipe.category, recipe.skill_req ? `nivel ${recipe.skill_req}` : null].filter(Boolean).join(" · ");
+  const isEnchant = recipe.yields_item === null && recipe.profession_slug === "enchanting";
 
   return (
     <details className="group">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 active:bg-surface-2">
-        <div className="min-w-0">
-          <p className={`truncate font-medium q-${quality ?? "COMMON"}`}>
-            {recipe.name_en}
-            {qty !== 1 && <span className="text-muted"> ×{qty}</span>}
-          </p>
-          {meta && <p className="truncate text-xs text-muted">{meta}</p>}
+        <div className="flex min-w-0 items-center gap-3">
+          <ItemIcon src={product?.icon} quality={product?.quality} />
+          <div className="min-w-0">
+            <p className={`truncate font-medium q-${product?.quality ?? "COMMON"}`}>
+              {recipe.name_en}
+              {qty !== 1 && <span className="text-muted"> ×{qty}</span>}
+            </p>
+            <p className="flex items-center gap-2 truncate text-xs text-muted">
+              {badge && <span className={`shrink-0 rounded border px-1 ${badge.className}`}>{badge.label}</span>}
+              {calc.product?.soldPerDay != null && <span className="shrink-0">≈{calc.product.soldPerDay}/día</span>}
+              <span className="truncate">{meta}</span>
+            </p>
+          </div>
         </div>
         <div className="shrink-0 text-right font-mono text-sm">
           <p className={profitClass}>
@@ -169,43 +209,66 @@ function RecipeItem({
       </summary>
 
       <div className="space-y-2 border-t border-line bg-surface-2 px-4 py-3 text-sm">
-        {recipe.recipe_reagents.length === 0 ? (
+        {calc.lines.length === 0 ? (
           <p className="text-muted">La API no indica los materiales de esta receta.</p>
         ) : (
-          <ul className="space-y-1">
-            {recipe.recipe_reagents.map((g) => {
-              const p = prices.get(g.item_id);
-              return (
-                <li key={g.item_id} className="flex justify-between gap-3">
-                  <Link href={`/item/${g.item_id}?house=${houseId}`} className="min-w-0 truncate underline decoration-line underline-offset-2">
-                    {g.qty} × {itemName(g.item_id)}
-                  </Link>
-                  <span className={`shrink-0 font-mono ${p ? "" : "text-bad"}`}>{p ? formatMoney(p.market * g.qty) : "sin stock"}</span>
-                </li>
-              );
-            })}
+          <ul className="space-y-1.5">
+            {calc.lines.map((l) => (
+              <li key={l.itemId} className="flex items-center justify-between gap-3">
+                <Link href={`/item/${l.itemId}?house=${houseId}`} className="flex min-w-0 items-center gap-2">
+                  <ItemIcon src={info.get(l.itemId)?.icon} quality={info.get(l.itemId)?.quality} size={20} />
+                  <span className="truncate underline decoration-line underline-offset-2">
+                    {l.qty} × {itemName(l.itemId)}
+                  </span>
+                </Link>
+                <span className="shrink-0 text-right font-mono">
+                  {l.total === null ? (
+                    <span className="text-bad">sin precio</span>
+                  ) : (
+                    <>
+                      {formatMoney(l.total)}
+                      <span className="block text-[11px] text-muted">
+                        {l.acquire?.via === "craft" && l.acquire.recipeId ? `fabricando (${recipeName.get(l.acquire.recipeId) ?? "receta"})` : VIA[l.acquire!.via]}
+                      </span>
+                    </>
+                  )}
+                </span>
+              </li>
+            ))}
           </ul>
         )}
 
-        <dl className="space-y-1 border-t border-line pt-2">
-          <div className="flex justify-between gap-3">
-            <dt className="text-muted">Vender en la subasta (neto)</dt>
-            <dd className="font-mono">{calc.ahRevenue === null ? "sin stock" : formatMoney(calc.ahRevenue)}</dd>
-          </div>
-          <div className="flex justify-between gap-3">
-            <dt className="text-muted">Vender a un vendedor</dt>
-            <dd className="font-mono">{formatMoney(calc.vendorRevenue)}</dd>
-          </div>
-        </dl>
-
-        {recipe.yields_item === null ? (
-          <p className="text-xs text-muted">La API no indica qué objeto fabrica esta receta, así que no se puede calcular el beneficio.</p>
+        {isEnchant ? (
+          <p className="border-t border-line pt-2 text-xs text-muted">Los encantamientos se aplican a un objeto: no se venden en la subasta, solo su coste es útil.</p>
         ) : (
+          <dl className="space-y-1 border-t border-line pt-2">
+            <Row label="Precio de venta (unidad)" value={calc.sellUnit === null ? "sin datos" : formatMoney(calc.sellUnit)} />
+            {calc.product && <Row label="Ahora: mínimo · media 7 días" value={`${formatMoney(calc.product.min)} · ${formatMoney(calc.product.market7d)}`} />}
+            {calc.product && <Row label="En venta" value={`${calc.product.qty} uds en ${calc.product.numAuctions} subastas`} />}
+            <Row label="Vender en la subasta (neto)" value={calc.ahRevenue === null ? "sin datos" : formatMoney(calc.ahRevenue)} />
+            <Row label="Vender a un vendedor" value={formatMoney(calc.vendorRevenue)} />
+            {calc.deposit && <Row label="Depósito 2 h · 24 h" value={`${formatMoney(calc.deposit.h2)} · ${formatMoney(calc.deposit.h24)}`} />}
+          </dl>
+        )}
+
+        {recipe.yields_item !== null && (
           <Link href={`/item/${recipe.yields_item}?house=${houseId}`} className="inline-block py-1 text-xs text-gold underline">
-            Ver precios de {itemName(recipe.yields_item)}
+            Ver historial de {itemName(recipe.yields_item)}
           </Link>
+        )}
+        {recipe.yields_item === null && !isEnchant && (
+          <p className="text-xs text-muted">La API no indica qué objeto fabrica esta receta, así que no se puede calcular el beneficio.</p>
         )}
       </div>
     </details>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="text-muted">{label}</dt>
+      <dd className="text-right font-mono">{value}</dd>
+    </div>
   );
 }

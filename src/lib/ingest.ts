@@ -2,11 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { BlizzardClient } from "./blizzard/client";
 import { factionFromName } from "./blizzard/schemas";
 import { aggregateListings } from "./pricing/aggregate";
-import { estimateSales, MAX_GAP_MS, toCompact, type CompactAuction } from "./pricing/sales";
+import { decodeState, encodeState, estimateSales, toCompact } from "./pricing/sales";
 import { REFERENCE_ITEMS } from "./reference-items";
 
 const CHUNK = 1000;
 const MAX_NEW_ITEMS_PER_RUN = 3000;
+const MAX_ICONS_PER_RUN = 2000;
 
 export function chunks<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -20,13 +21,26 @@ export async function must<T>(p: PromiseLike<{ data: T; error: { message: string
   return data;
 }
 
-async function logError(db: SupabaseClient, houseId: number | null, stage: string, err: unknown) {
+export async function logError(db: SupabaseClient, houseId: number | null, stage: string, err: unknown) {
   const message = err instanceof Error ? err.message : String(err);
   console.error(`[${stage}] casa ${houseId ?? "-"}: ${message}`);
   await db.from("ingest_errors").insert({ house_id: houseId, stage, message });
 }
 
-export type IngestResult = { houseId: number; status: "ok" | "not-modified" | "error"; items?: number; auctions?: number };
+export type IngestResult = {
+  houseId: number;
+  status: "ok" | "not-modified" | "error";
+  items?: number;
+  auctions?: number;
+  /** Minutos entre este snapshot y el anterior; null si no se pudieron estimar ventas. */
+  gapMinutes?: number | null;
+};
+
+/** Hora de los datos según Last-Modified; si falta, la de descarga. */
+function dataTime(lastModified: string | null, fallback: Date): Date {
+  const t = lastModified ? Date.parse(lastModified) : NaN;
+  return Number.isNaN(t) ? fallback : new Date(t);
+}
 
 /** Ingesta de una casa: descarga, agrega por objeto, estima ventas y guarda el snapshot. */
 export async function ingestHouse(
@@ -45,110 +59,190 @@ export async function ingestHouse(
     const { listings, lastModified, skipped } = result;
     if (skipped > 0) await logError(db, houseId, "parse", `${skipped} subastas con formato inesperado`);
     if (listings.length === 0) throw new Error("La API devolvió 0 subastas");
+    const dataAt = dataTime(lastModified, fetchedAt);
 
     const aggregates = aggregateListings(listings);
 
-    const state = await must(db.from("house_state").select("fetched_at, auctions").eq("house_id", houseId).maybeSingle());
-    const canEstimate = state !== null && fetchedAt.getTime() - new Date(state.fetched_at).getTime() <= MAX_GAP_MS;
-    const sold = canEstimate ? estimateSales(state.auctions as CompactAuction[], listings) : null;
+    // Ventas: diferencia con el estado anterior. Si el estado está corrupto, se sigue sin estimar.
+    let sold: Map<number, number> | null = null;
+    let gapMs: number | null = null;
+    const prev = await must(db.from("house_state").select("data_at, fetched_at, state").eq("house_id", houseId).maybeSingle());
+    if (prev) {
+      try {
+        gapMs = dataAt.getTime() - new Date(prev.data_at ?? prev.fetched_at).getTime();
+        sold = estimateSales(decodeState(prev.state as string), listings, gapMs);
+      } catch (err) {
+        await logError(db, houseId, "state", err);
+      }
+    }
+    const gapMinutes = sold && gapMs !== null ? Math.round(gapMs / 60_000) : null;
 
     const snapshot = await must(
       db
         .from("snapshots")
-        .insert({ house_id: houseId, fetched_at: fetchedAt.toISOString(), last_modified_header: lastModified, auction_count: listings.length })
+        .insert({
+          house_id: houseId,
+          fetched_at: fetchedAt.toISOString(),
+          data_at: dataAt.toISOString(),
+          last_modified_header: lastModified,
+          auction_count: listings.length,
+          gap_minutes: gapMinutes,
+        })
         .select("id")
         .single(),
     );
     if (!snapshot) throw new Error("No se pudo crear el snapshot");
 
-    const rows = [...aggregates.values()].map((a) => ({
+    const rows: Record<string, number | null>[] = [...aggregates.values()].map((a) => ({
       snapshot_id: snapshot.id,
       item_id: a.itemId,
       min_buyout: a.minBuyout,
       p15_market: a.p15Market,
-      median: a.median,
       qty: a.qty,
       num_auctions: a.numAuctions,
       est_sold: sold ? (sold.get(a.itemId) ?? 0) : null,
     }));
+    // Objetos que se han agotado: sin precio, pero sus ventas cuentan.
+    for (const [itemId, n] of sold ?? []) {
+      if (!aggregates.has(itemId) && n > 0) {
+        rows.push({ snapshot_id: snapshot.id, item_id: itemId, min_buyout: null, p15_market: null, qty: 0, num_auctions: 0, est_sold: n });
+      }
+    }
     for (const part of chunks(rows, CHUNK)) await must(db.from("item_prices_hourly").insert(part));
+
+    // Precio actual: se sobrescribe y luego se borra lo que ya no está en venta.
+    const latest = [...aggregates.values()].map((a) => ({
+      house_id: houseId,
+      item_id: a.itemId,
+      snapshot_id: snapshot.id,
+      fetched_at: fetchedAt.toISOString(),
+      min_buyout: a.minBuyout,
+      p15_market: a.p15Market,
+      qty: a.qty,
+      num_auctions: a.numAuctions,
+    }));
+    for (const part of chunks(latest, CHUNK)) await must(db.from("item_prices_latest").upsert(part));
+    await must(db.from("item_prices_latest").delete().eq("house_id", houseId).neq("snapshot_id", snapshot.id));
 
     await must(
       db.from("house_state").upsert({
         house_id: houseId,
         snapshot_id: snapshot.id,
         fetched_at: fetchedAt.toISOString(),
-        auctions: toCompact(listings),
+        data_at: dataAt.toISOString(),
+        state: encodeState(toCompact(listings)),
       }),
     );
     await must(db.from("houses").update({ auction_count: listings.length }).eq("id", houseId));
 
-    return { houseId, status: "ok", items: rows.length, auctions: listings.length };
+    return { houseId, status: "ok", items: rows.length, auctions: listings.length, gapMinutes };
   } catch (err) {
     await logError(db, houseId, "ingest", err);
     return { houseId, status: "error" };
   }
 }
 
-/** Consulta en static-forever los objetos que aún no están en `items` y los guarda. Lanza si falla la BD. */
-export async function storeItems(db: SupabaseClient, blizzard: BlizzardClient, ids: number[], limit = Infinity): Promise<number> {
-  // Los que ya están en `items` con source='missing' dieron 404: no se reintentan.
-  const known = new Set<number>();
-  for (const part of chunks(ids, 500)) {
-    const rows = await must(db.from("items").select("id").in("id", part));
-    for (const r of rows ?? []) known.add(r.id as number);
-  }
-  const todo = ids.filter((id) => !known.has(id)).slice(0, limit);
+type ItemData = NonNullable<Awaited<ReturnType<BlizzardClient["item"]>>>;
 
+const itemRow = (id: number, item: ItemData, source: "blizzard" | "classic") => ({
+  id,
+  name_en: item.name ?? null,
+  quality: item.quality?.type ?? null,
+  vendor_sell: item.sell_price ?? null,
+  vendor_buy: item.purchase_price ?? null,
+  class: item.item_class?.name ?? null,
+  subclass: item.item_subclass?.name ?? null,
+  source,
+  updated_at: new Date().toISOString(),
+});
+
+/**
+ * Consulta los objetos indicados y los guarda. Primero static-forever; si da 404, el catálogo de
+ * Classic Era. `source`: 'blizzard' (Forever), 'classic', o 'none' (no está en ninguno).
+ */
+async function fetchItems(db: SupabaseClient, blizzard: BlizzardClient, ids: number[]): Promise<number> {
   let done = 0;
-  for (const batch of chunks(todo, 10)) {
+  for (const batch of chunks(ids, 10)) {
     const rows = await Promise.all(
       batch.map(async (id) => {
-        const item = await blizzard.item(id).catch(() => undefined);
-        if (item === undefined) return null; // error de red: se reintenta en la próxima ejecución
-        if (item === null) return { id, source: "missing" };
-        return {
-          id,
-          name_en: item.name ?? null,
-          quality: item.quality?.type ?? null,
-          vendor_sell: item.sell_price ?? null,
-          vendor_buy: item.purchase_price ?? null,
-          class: item.item_class?.name ?? null,
-          subclass: item.item_subclass?.name ?? null,
-          source: "blizzard",
-        };
+        try {
+          const forever = await blizzard.item(id, "static");
+          if (forever) return itemRow(id, forever, "blizzard");
+          const classic = await blizzard.item(id, "classic");
+          if (classic) return itemRow(id, classic, "classic");
+          return { id, source: "none" };
+        } catch {
+          return null; // error de red: se reintenta en la próxima ejecución
+        }
       }),
     );
     const valid = rows.filter((r) => r !== null);
-    // Dos upserts: PostgREST exige las mismas columnas en todas las filas de un lote.
-    const found = valid.filter((r) => r.source === "blizzard");
-    const missing = valid.filter((r) => r.source === "missing");
+    // Upserts separados: PostgREST exige las mismas columnas en todas las filas de un lote.
+    const found = valid.filter((r) => r.source !== "none");
+    const none = valid.filter((r) => r.source === "none");
     if (found.length) await must(db.from("items").upsert(found));
-    if (missing.length) await must(db.from("items").upsert(missing));
+    if (none.length) await must(db.from("items").upsert(none));
     done += valid.length;
   }
   return done;
 }
 
-/** Rellena `items` con los objetos vistos en la subasta que aún no conocemos. */
-export async function syncItemNames(db: SupabaseClient, blizzard: BlizzardClient, houseIds: number[]): Promise<number> {
+/** Guarda los objetos que aún no están en `items` (o que solo se probaron en static-forever). */
+export async function storeItems(db: SupabaseClient, blizzard: BlizzardClient, ids: number[], limit = Infinity): Promise<number> {
+  const known = new Set<number>();
+  for (const part of chunks(ids, 500)) {
+    const rows = await must(db.from("items").select("id, source").in("id", part));
+    for (const r of rows ?? []) if (r.source !== "missing") known.add(r.id as number);
+  }
+  return fetchItems(db, blizzard, ids.filter((id) => !known.has(id)).slice(0, limit));
+}
+
+/** Busca los iconos que faltan (icon_url null). Los que no tienen icono quedan con ''. */
+async function fetchIcons(db: SupabaseClient, blizzard: BlizzardClient, limit: number): Promise<number> {
+  const rows = await must(db.from("items").select("id, source").is("icon_url", null).neq("source", "none").limit(limit));
+  let done = 0;
+  for (const batch of chunks(rows ?? [], 10)) {
+    const icons = await Promise.all(
+      batch.map(async (r) => {
+        try {
+          const ns = r.source === "classic" ? "classic" : "static";
+          const url = (await blizzard.itemIcon(r.id as number, ns)) ?? (ns === "static" ? await blizzard.itemIcon(r.id as number, "classic") : null);
+          return { id: r.id as number, icon_url: url ?? "" };
+        } catch {
+          return null;
+        }
+      }),
+    );
+    const valid = icons.filter((i) => i !== null);
+    // Solo se actualiza icon_url: todas las filas ya existen.
+    if (valid.length) await must(db.from("items").upsert(valid, { onConflict: "id" }));
+    done += valid.length;
+  }
+  return done;
+}
+
+/**
+ * Completa nombres e iconos de lo que hay en venta: objetos nuevos, los que dieron 404 en
+ * static-forever antes de existir el respaldo de Classic ('missing'), y los iconos pendientes.
+ */
+export async function enrichItems(db: SupabaseClient, blizzard: BlizzardClient, houseIds: number[]) {
   try {
-    const seen = new Set<number>();
+    const unnamed = new Set<number>();
     for (const houseId of houseIds) {
       for (let from = 0; ; from += CHUNK) {
         const page = await must(
           db.from("latest_item_prices").select("item_id").eq("house_id", houseId).is("name_en", null).order("item_id").range(from, from + CHUNK - 1),
         );
-        for (const r of page ?? []) seen.add(r.item_id as number);
+        for (const r of page ?? []) unnamed.add(r.item_id as number);
         if (!page || page.length < CHUNK) break;
       }
     }
-    if (seen.size === 0) return 0;
-
-    return await storeItems(db, blizzard, [...seen], MAX_NEW_ITEMS_PER_RUN);
+    const named = unnamed.size ? await storeItems(db, blizzard, [...unnamed], MAX_NEW_ITEMS_PER_RUN) : 0;
+    const icons = await fetchIcons(db, blizzard, MAX_ICONS_PER_RUN);
+    return { named, icons };
   } catch (err) {
     await logError(db, null, "items", err);
-    return 0;
+    return { named: 0, icons: 0 };
   }
 }
 

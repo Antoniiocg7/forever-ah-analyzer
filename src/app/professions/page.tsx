@@ -3,10 +3,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { Loading, NoRecipesNotice, SetupNotice } from "@/components/notices";
 import { isConfigured } from "@/lib/env";
-import { professionSummaries } from "@/lib/professions/queries";
-
-/** Las profesiones del usuario salen primero. */
-const MINE = ["mining", "blacksmithing", "first-aid"];
+import { economySettings, professionSummaries } from "@/lib/professions/queries";
 
 export default function Page() {
   return (
@@ -25,7 +22,7 @@ export default function Page() {
 async function Professions() {
   await connection();
   if (!isConfigured()) return <SetupNotice />;
-  const all = await professionSummaries();
+  const [all, { myProfessions: MINE }] = await Promise.all([professionSummaries(), economySettings("alliance")]);
   if (all.length === 0) return <NoRecipesNotice />;
 
   const rank = (slug: string) => (MINE.includes(slug) ? MINE.indexOf(slug) : MINE.length);
@@ -37,7 +34,9 @@ async function Professions() {
         <li key={p.slug}>
           <Link href={`/professions/${p.slug}`} className={`card block active:bg-surface-2 ${MINE.includes(p.slug) ? "border-gold" : ""}`}>
             <p className="font-medium">{p.name}</p>
-            <p className="mt-1 text-xs text-muted">{p.recipes.toLocaleString("es-ES")} recetas</p>
+            <p className="mt-1 text-xs text-muted">
+              {p.recipes.toLocaleString("es-ES")} recetas{MINE.includes(p.slug) && " · tuya"}
+            </p>
           </Link>
         </li>
       ))}

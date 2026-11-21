@@ -2,7 +2,7 @@ name: Ingesta horaria
 
 on:
   schedule:
-    - cron: "27 * * * *" # Blizzard publicó a y 19 (visto el 16-11-2026); margen de unos minutos
+    - cron: "35 * * * *" # respaldo: el disparo fiable lo hace pg_cron en Supabase (ver README)
   workflow_dispatch:
 
 concurrency:

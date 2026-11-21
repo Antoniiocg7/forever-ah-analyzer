@@ -41,3 +41,10 @@ body {
 .q-EPIC { color: #b678e8; }
 .q-LEGENDARY { color: #f0933f; }
 .q-POOR { color: #9299a6; }
+
+.q-border-COMMON { border-color: #3a4150; }
+.q-border-UNCOMMON { border-color: #5fc98b; }
+.q-border-RARE { border-color: #5b9cf0; }
+.q-border-EPIC { border-color: #b678e8; }
+.q-border-LEGENDARY { border-color: #f0933f; }
+.q-border-POOR { border-color: #3a4150; }

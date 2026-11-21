@@ -49,6 +49,10 @@ export const itemSchema = z.object({
   item_subclass: z.object({ name: localized.optional() }).optional(),
 });
 
+export const mediaSchema = z.object({
+  assets: z.array(z.object({ key: z.string(), value: z.string() })).optional().default([]),
+});
+
 const named = z.object({ id: z.number(), name: localized.optional() });
 
 export const professionIndexSchema = z.object({ professions: z.array(named).optional().default([]) });

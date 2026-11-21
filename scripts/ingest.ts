@@ -1,6 +1,6 @@
 // Ingesta horaria de las casas marcadas como `tracked`.
 // Uso: pnpm ingest
-import { ingestHouse, syncItemNames } from "../src/lib/ingest";
+import { enrichItems, ingestHouse } from "../src/lib/ingest";
 import { setup } from "./_setup";
 
 async function main(): Promise<number> {
@@ -17,13 +17,14 @@ async function main(): Promise<number> {
   let failed = false;
   for (const house of houses) {
     const r = await ingestHouse(db, blizzard, rulesetId, house.id);
-    console.log(`casa ${house.id} (${house.label ?? "sin etiqueta"}): ${r.status}`, r.items ? `· ${r.items} objetos · ${r.auctions} subastas` : "");
+    const gap = r.gapMinutes === undefined ? "" : r.gapMinutes === null ? " · sin estimar ventas" : ` · ventas estimadas sobre ${r.gapMinutes} min`;
+    console.log(`casa ${house.id} (${house.label ?? "sin etiqueta"}): ${r.status}`, r.items ? `· ${r.items} objetos · ${r.auctions} subastas${gap}` : "");
     if (r.status === "error") failed = true;
   }
 
-  const named = await syncItemNames(db, blizzard, houses.map((h) => h.id));
+  const { named, icons } = await enrichItems(db, blizzard, houses.map((h) => h.id));
   const mem = Math.round(process.memoryUsage().rss / 1024 / 1024);
-  console.log(`Objetos nuevos consultados: ${named}. Tiempo: ${((Date.now() - started) / 1000).toFixed(1)} s. Memoria: ${mem} MB.`);
+  console.log(`Objetos consultados: ${named}. Iconos: ${icons}. Tiempo: ${((Date.now() - started) / 1000).toFixed(1)} s. Memoria: ${mem} MB.`);
   return failed ? 1 : 0;
 }
 

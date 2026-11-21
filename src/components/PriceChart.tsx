@@ -48,9 +48,9 @@ export function PriceChart({ hourly, daily }: { hourly: PricePoint[]; daily: Pri
                 <CartesianGrid stroke="#2a2f3a" vertical={false} />
                 <XAxis dataKey="t" type="number" scale="time" domain={["dataMin", "dataMax"]} tickFormatter={fmtTick(range)} minTickGap={40} {...axis} />
                 <YAxis tickFormatter={(v: number) => formatMoney(v)} width={64} domain={["auto", "auto"]} {...axis} />
-                <Tooltip contentStyle={tooltipStyle} labelFormatter={(t) => fmtFull(Number(t))} formatter={(v, name) => [formatMoney(Number(v)), name]} />
-                <Line name="Mínimo" dataKey="min" stroke="#e0b354" dot={false} strokeWidth={2} isAnimationActive={false} />
-                <Line name="Mercado" dataKey="market" stroke="#5b9cf0" dot={false} strokeWidth={2} isAnimationActive={false} />
+                <Tooltip contentStyle={tooltipStyle} labelFormatter={(t) => fmtFull(Number(t))} formatter={(v, name) => [v == null ? "agotado" : formatMoney(Number(v)), name]} />
+                <Line name="Mínimo" dataKey="min" stroke="#e0b354" dot={data.length < 30} strokeWidth={2} isAnimationActive={false} connectNulls={false} />
+                <Line name="Mercado" dataKey="market" stroke="#5b9cf0" dot={data.length < 30} strokeWidth={2} isAnimationActive={false} connectNulls={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

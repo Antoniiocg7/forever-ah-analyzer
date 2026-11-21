@@ -4,6 +4,7 @@ import {
   extractHouses,
   hrefSchema,
   itemSchema,
+  mediaSchema,
   professionIndexSchema,
   professionSchema,
   recipeSchema,
@@ -26,6 +27,18 @@ type GetResult =
   | { status: 200; json: unknown; lastModified: string | null }
   | { status: 304 }
   | { status: 404 };
+
+/**
+ * - dynamic/static: los de Forever.
+ * - classic: catálogo de Classic Era. Forever reutiliza sus IDs y ahí están casi todos los objetos que
+ *   dan 404 en static-forever (comprobado el 21-11-2026).
+ */
+export type Namespace = "dynamic" | "static" | "classic";
+const NAMESPACE_PREFIX: Record<Namespace, string> = {
+  dynamic: "dynamic-forever",
+  static: "static-forever",
+  classic: "static-classic1x",
+};
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -62,11 +75,11 @@ export class BlizzardClient {
   /** GET con reintentos y backoff en 429/5xx. `pathOrUrl` puede ser un href completo de la API. */
   async get(
     pathOrUrl: string,
-    opts: { namespace: "dynamic" | "static"; ifModifiedSince?: string | null },
+    opts: { namespace: Namespace; ifModifiedSince?: string | null },
   ): Promise<GetResult> {
     const url = new URL(pathOrUrl, this.host);
     if (url.host !== new URL(this.host).host) throw new Error(`Host inesperado: ${url.host}`);
-    url.searchParams.set("namespace", `${opts.namespace}-forever-${this.region}`);
+    url.searchParams.set("namespace", `${NAMESPACE_PREFIX[opts.namespace]}-${this.region}`);
     url.searchParams.set("locale", "en_US");
 
     for (let attempt = 0; ; attempt++) {
@@ -155,12 +168,20 @@ export class BlizzardClient {
     return { listings: out, lastModified: house.lastModified, skipped };
   }
 
-  /** Datos estáticos de un objeto. null si da 404 (pasa con ~43% de los IDs). */
-  async item(itemId: number) {
-    const res = await this.get(`/data/wow/item/${itemId}`, { namespace: "static" });
+  /** Datos estáticos de un objeto. null si da 404 (pasa con ~43% de los IDs en static-forever). */
+  async item(itemId: number, namespace: "static" | "classic" = "static") {
+    const res = await this.get(`/data/wow/item/${itemId}`, { namespace });
     if (res.status !== 200) return null;
     const parsed = itemSchema.safeParse(res.json);
     return parsed.success ? parsed.data : null;
+  }
+
+  /** URL del icono de un objeto (render.worldofwarcraft.com). null si no hay. */
+  async itemIcon(itemId: number, namespace: "static" | "classic" = "static"): Promise<string | null> {
+    const res = await this.get(`/data/wow/media/item/${itemId}`, { namespace });
+    if (res.status !== 200) return null;
+    const parsed = mediaSchema.safeParse(res.json);
+    return parsed.success ? (parsed.data.assets.find((a) => a.key === "icon")?.value ?? null) : null;
   }
 
   /** GET a static-forever validado con un esquema. null si da 404 o el formato no encaja. */

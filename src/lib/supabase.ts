@@ -32,12 +32,16 @@ export type LatestPriceRow = {
   item_id: number;
   min_buyout: number;
   p15_market: number;
-  median: number;
   qty: number;
   num_auctions: number;
-  est_sold: number | null;
+  /** Media del precio de mercado de los últimos 7 días. */
+  market_7d: number | null;
+  /** ESTIMACIÓN de ventas por día (media de 7 días). */
+  sold_per_day: number | null;
   name_en: string | null;
   quality: string | null;
   icon_url: string | null;
   vendor_sell: number | null;
+  vendor_buy: number | null;
+  vendor_sold: boolean | null;
 };

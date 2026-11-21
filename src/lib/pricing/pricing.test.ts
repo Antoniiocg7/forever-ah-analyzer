@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Listing } from "../blizzard/client";
 import { aggregateItem, aggregateListings } from "./aggregate";
-import { estimateSales, type CompactAuction } from "./sales";
+import { decodeState, encodeState, estimateSales, type CompactAuction } from "./sales";
 
 const listing = (auctionId: number, itemId: number, qty: number, unitPrice: number | null, timeLeft: Listing["timeLeft"] = "VERY_LONG"): Listing => ({
   auctionId,
@@ -71,14 +71,40 @@ describe("estimateSales", () => {
   ];
   const curr = [listing(3, 2840, 30, 100, "LONG"), listing(4, 2771, 5, 900, "SHORT"), listing(6, 2770, 99, 45)];
 
+  const HOUR = 3_600_000;
+
   it("cuenta desapariciones no caducadas y bajadas de cantidad", () => {
-    const sold = estimateSales(prev, curr);
+    const sold = estimateSales(prev, curr, HOUR)!;
     expect(sold.get(2770)).toBe(20);
     expect(sold.get(2840)).toBe(20);
     expect(sold.has(2771)).toBe(false);
   });
 
+  it("con un hueco de 8 h solo fían las VERY_LONG (una LONG pudo caducar)", () => {
+    const longGone: CompactAuction[] = [
+      [10, 2770, 5, "VERY_LONG"],
+      [11, 2770, 7, "LONG"],
+    ];
+    expect(estimateSales(longGone, [], 8 * HOUR)!.get(2770)).toBe(5);
+    expect(estimateSales(longGone, [], HOUR)!.get(2770)).toBe(12);
+  });
+
+  it("no estima con huecos de 12 h o más, ni con hueco nulo", () => {
+    expect(estimateSales(prev, curr, 13 * HOUR)).toBeNull();
+    expect(estimateSales(prev, curr, 0)).toBeNull();
+  });
+
   it("no cuenta nada si no hay snapshot previo", () => {
-    expect(estimateSales([], curr).size).toBe(0);
+    expect(estimateSales([], curr, HOUR)!.size).toBe(0);
+  });
+});
+
+describe("encodeState / decodeState", () => {
+  it("ida y vuelta sin pérdidas", () => {
+    const state: CompactAuction[] = [
+      [1, 2770, 20, "VERY_LONG"],
+      [2, 2840, 3, "SHORT"],
+    ];
+    expect(decodeState(encodeState(state))).toEqual(state);
   });
 });
