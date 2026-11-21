@@ -44,4 +44,6 @@ export type LatestPriceRow = {
   vendor_sell: number | null;
   vendor_buy: number | null;
   vendor_sold: boolean | null;
+  /** 1 − mínimo / mediana de 7 días: 0,2 = un 20% más barato de lo normal. */
+  discount: number | null;
 };

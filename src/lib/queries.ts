@@ -21,12 +21,37 @@ export async function houseProbes(): Promise<ProbeRow[]> {
   return unwrap(await supabaseAdmin().from("house_probe").select("house_id, item_id, min_buyout, qty"));
 }
 
-export async function searchPrices(houseId: number, q: string): Promise<LatestPriceRow[]> {
+export const PRICE_SORTS = { sold: "Más vendidos", deals: "Por debajo de su precio", stock: "Más stock" } as const;
+export type PriceSort = keyof typeof PRICE_SORTS;
+
+/** Mercado mínimo (de settings.deals) para que un objeto cuente como ganga: evita la morralla de cobre. */
+async function dealsMinMarket(): Promise<number> {
+  const row = unwrap<{ value: { min_market?: number } } | null>(
+    await supabaseAdmin().from("settings").select("value").eq("key", "deals").maybeSingle(),
+  );
+  return row?.value?.min_market ?? 10000;
+}
+
+/**
+ * Lista de precios de una casa.
+ * - sold: más vendidos (ventas estimadas/día); sin estimación, por stock.
+ * - deals: mínimo actual al menos un 10% por debajo de su mediana de 7 días.
+ * - stock: más unidades en venta.
+ */
+export async function searchPrices(houseId: number, q: string, sort: PriceSort = "sold"): Promise<LatestPriceRow[]> {
   let query = supabaseAdmin().from("latest_item_prices").select("*").eq("house_id", houseId);
   const term = q.trim();
   if (/^\d+$/.test(term)) query = query.eq("item_id", Number(term));
   else if (term) query = query.ilike("name_en", `%${term.replace(/[%_\\]/g, "\\$&")}%`);
-  return unwrap(await query.order("qty", { ascending: false }).limit(50));
+
+  if (sort === "deals") {
+    query = query.gte("discount", 0.1).gte("market_7d", await dealsMinMarket()).order("discount", { ascending: false });
+  } else if (sort === "sold") {
+    query = query.order("sold_per_day", { ascending: false, nullsFirst: false }).order("qty", { ascending: false });
+  } else {
+    query = query.order("qty", { ascending: false });
+  }
+  return unwrap(await query.limit(50));
 }
 
 export async function latestPrice(houseId: number, itemId: number): Promise<LatestPriceRow | null> {

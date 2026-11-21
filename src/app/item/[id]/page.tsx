@@ -7,6 +7,7 @@ import { Loading, NoHousesNotice, SetupNotice } from "@/components/notices";
 import { PriceChart } from "@/components/PriceChart";
 import { isConfigured } from "@/lib/env";
 import { formatMoney } from "@/lib/money";
+import { recipesForItem, type RecipeLink } from "@/lib/professions/queries";
 import { dailySeries, hourlySeries, itemById, latestPrice, trackedHouses } from "@/lib/queries";
 
 export default function Page(props: PageProps<"/item/[id]">) {
@@ -32,11 +33,12 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
   if (houses.length === 0) return <NoHousesNotice />;
   const house = houses.find((h) => String(h.id) === sp.house) ?? houses[0];
 
-  const [item, latest, hourly, daily] = await Promise.all([
+  const [item, latest, hourly, daily, recipes] = await Promise.all([
     itemById(itemId),
     latestPrice(house.id, itemId),
     hourlySeries(house.id, itemId),
     dailySeries(house.id, itemId),
+    recipesForItem(itemId),
   ]);
 
   // Ventas por día: media de 7 días ya calculada; si no hay, la de los días disponibles.
@@ -86,10 +88,40 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
 
       <PriceChart hourly={hourly} daily={daily} />
 
+      <RecipeList title="Se fabrica con" recipes={recipes.makes} houseId={house.id} />
+      <RecipeList title="Se usa en" recipes={recipes.uses} houseId={house.id} showQty />
+
       <p className="text-xs text-muted">
         “Mercado” es la media del 15% de unidades más baratas. Las ventas son una estimación por diferencia entre snapshots: la
         API no publica ventas reales.
       </p>
     </div>
+  );
+}
+
+function RecipeList({ title, recipes, houseId, showQty }: { title: string; recipes: RecipeLink[]; houseId: number; showQty?: boolean }) {
+  if (recipes.length === 0) return null;
+  return (
+    <section className="space-y-2">
+      <h2 className="text-sm font-medium text-muted">
+        {title} <span className="font-normal">({recipes.length})</span>
+      </h2>
+      <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface text-sm">
+        {recipes.map((r) => (
+          <li key={r.id}>
+            <Link
+              href={`/professions/${r.slug}?house=${houseId}&q=${encodeURIComponent(r.name)}`}
+              className="flex items-center justify-between gap-3 px-4 py-2.5 active:bg-surface-2"
+            >
+              <span className="min-w-0 truncate">
+                {showQty && r.qty ? <span className="text-muted">{r.qty} × en </span> : null}
+                {r.name}
+              </span>
+              <span className="shrink-0 text-xs text-muted">{r.profession}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

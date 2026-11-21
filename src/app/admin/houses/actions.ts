@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 import { HOUSE_LABELS } from "@/lib/house-labels";
 import { supabaseAdmin } from "@/lib/supabase";
 
+/** En local (pnpm dev) no se pide contraseña; publicada, sí. */
 function tokenOk(given: string): boolean {
+  if (process.env.NODE_ENV !== "production") return true;
   const expected = process.env.ADMIN_TOKEN ?? "";
   if (!expected) return false;
   const a = Buffer.from(given);

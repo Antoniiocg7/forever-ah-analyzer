@@ -148,3 +148,23 @@ export async function economySettings(faction: string): Promise<EconomySettings>
     myProfessions: Array.isArray(mine) ? mine.filter((s): s is string => typeof s === "string") : [],
   };
 }
+
+export type RecipeLink = { id: number; name: string; profession: string; slug: string; qty?: number };
+
+/** Recetas que fabrican un objeto y recetas que lo usan como material. */
+export async function recipesForItem(itemId: number): Promise<{ makes: RecipeLink[]; uses: RecipeLink[] }> {
+  const db = supabaseAdmin();
+  type R = { id: number; name_en: string; profession: string; profession_slug: string };
+  const [makes, uses] = await Promise.all([
+    db.from("recipes").select("id, name_en, profession, profession_slug").eq("yields_item", itemId).order("name_en"),
+    db.from("recipe_reagents").select("qty, recipes(id, name_en, profession, profession_slug)").eq("item_id", itemId).limit(200),
+  ]);
+  const toLink = (r: R, qty?: number): RecipeLink => ({ id: r.id, name: r.name_en, profession: r.profession, slug: r.profession_slug, qty });
+  return {
+    makes: unwrap<R[]>(makes).map((r) => toLink(r)),
+    uses: unwrap<{ qty: number; recipes: R | null }[]>(uses as never)
+      .filter((u) => u.recipes)
+      .map((u) => toLink(u.recipes!, u.qty))
+      .sort((a, b) => a.profession.localeCompare(b.profession) || a.name.localeCompare(b.name)),
+  };
+}

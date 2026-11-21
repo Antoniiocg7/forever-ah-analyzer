@@ -7,7 +7,7 @@ import type { PricePoint } from "@/lib/queries";
 
 const TZ = "Europe/Warsaw";
 const fmtTick = (range: "7d" | "30d") => (t: number) =>
-  new Date(t).toLocaleString("es-ES", range === "7d" ? { timeZone: TZ, weekday: "short", hour: "2-digit" } : { timeZone: TZ, day: "numeric", month: "short" });
+  new Date(t).toLocaleString("es-ES", range === "7d" ? { timeZone: TZ, weekday: "short", day: "numeric" } : { timeZone: TZ, day: "numeric", month: "short" });
 const fmtFull = (t: number) => new Date(t).toLocaleString("es-ES", { timeZone: TZ, dateStyle: "medium", timeStyle: "short" });
 
 const tooltipStyle = { background: "#1f232c", border: "1px solid #2a2f3a", borderRadius: 8, fontSize: 12 };
