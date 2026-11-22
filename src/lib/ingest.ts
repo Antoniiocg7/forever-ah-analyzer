@@ -152,6 +152,11 @@ const itemRow = (id: number, item: ItemData, source: "blizzard" | "classic") => 
   vendor_buy: item.purchase_price ?? null,
   class: item.item_class?.name ?? null,
   subclass: item.item_subclass?.name ?? null,
+  item_level: item.level ?? null,
+  required_level: item.required_level ?? null,
+  teaches_profession_id: item.preview_item?.requirements?.skill?.profession.id ?? null,
+  teaches_skill: item.preview_item?.requirements?.skill?.level ?? null,
+  teaches_item: item.preview_item?.recipe?.item?.item.id ?? null,
   source,
   updated_at: new Date().toISOString(),
 });
@@ -160,7 +165,7 @@ const itemRow = (id: number, item: ItemData, source: "blizzard" | "classic") => 
  * Consulta los objetos indicados y los guarda. Primero static-forever; si da 404, el catálogo de
  * Classic Era. `source`: 'blizzard' (Forever), 'classic', o 'none' (no está en ninguno).
  */
-async function fetchItems(db: SupabaseClient, blizzard: BlizzardClient, ids: number[]): Promise<number> {
+export async function fetchItems(db: SupabaseClient, blizzard: BlizzardClient, ids: number[]): Promise<number> {
   let done = 0;
   for (const batch of chunks(ids, 10)) {
     const rows = await Promise.all(

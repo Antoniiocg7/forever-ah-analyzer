@@ -11,7 +11,8 @@
     "test": "vitest run",
     "discover": "tsx scripts/discover-houses.ts",
     "ingest": "tsx scripts/ingest.ts",
-    "sync-recipes": "tsx scripts/sync-recipes.ts"
+    "sync-recipes": "tsx scripts/sync-recipes.ts",
+    "sync-skills": "tsx scripts/sync-skills.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",

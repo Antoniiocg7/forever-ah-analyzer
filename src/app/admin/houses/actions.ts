@@ -1,24 +1,14 @@
 "use server";
 
-import { timingSafeEqual } from "node:crypto";
 import { redirect } from "next/navigation";
+import { adminTokenOk } from "@/lib/admin";
 import { HOUSE_LABELS } from "@/lib/house-labels";
 import { supabaseAdmin } from "@/lib/supabase";
-
-/** En local (pnpm dev) no se pide contraseña; publicada, sí. */
-function tokenOk(given: string): boolean {
-  if (process.env.NODE_ENV !== "production") return true;
-  const expected = process.env.ADMIN_TOKEN ?? "";
-  if (!expected) return false;
-  const a = Buffer.from(given);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 export async function saveHouseLabel(formData: FormData) {
   const houseId = Number(formData.get("houseId"));
   const label = String(formData.get("label") ?? "");
-  if (!tokenOk(String(formData.get("token") ?? ""))) redirect("/admin/houses?msg=token");
+  if (!adminTokenOk(String(formData.get("token") ?? ""))) redirect("/admin/houses?msg=token");
   if (!Number.isInteger(houseId) || (label !== "" && !HOUSE_LABELS.includes(label))) redirect("/admin/houses?msg=invalid");
 
   const db = supabaseAdmin();

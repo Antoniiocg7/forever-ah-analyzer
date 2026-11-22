@@ -3,11 +3,14 @@ import { Suspense } from "react";
 import { HouseTabs } from "@/components/HouseTabs";
 import { ItemIcon } from "@/components/ItemIcon";
 import { Loading, NoHousesNotice, NoRecipesNotice, SetupNotice } from "@/components/notices";
+import { adminTokenRequired } from "@/lib/admin";
 import { isConfigured } from "@/lib/env";
 import { formatMoney } from "@/lib/money";
 import { craftCosts, craftEconomics, type CraftResult, type Liquidity } from "@/lib/professions/craft";
+import { colorsFor, type ColorOffsets } from "@/lib/professions/leveling";
 import { economySettings, marketData, recipesFor, toRecipeInput, type ItemInfo, type RecipeRow } from "@/lib/professions/queries";
 import { trackedHouses } from "@/lib/queries";
+import { saveRecipeSkill } from "../actions";
 
 const SORTS = { profit: "Beneficio", margin: "Margen", cost: "Coste", name: "Nombre" } as const;
 type Sort = keyof typeof SORTS;
@@ -20,6 +23,13 @@ const LIQUIDITY: Record<Liquidity, { label: string; className: string } | null> 
 };
 
 const VIA = { ah: "subasta", vendor: "vendedor", craft: "fabricando" } as const;
+const SOURCE: Record<string, string> = { item: "oficial", manual: "corregido por ti", classic: "aprox. (Classic)", estimate: "aprox." };
+const MESSAGES: Record<string, { text: string; ok: boolean }> = {
+  ok: { text: "Nivel guardado. El planificador ya lo usa.", ok: true },
+  reset: { text: "Corrección quitada. Se volverá a estimar con pnpm sync-skills.", ok: true },
+  token: { text: "La contraseña de administración no es correcta.", ok: false },
+  invalid: { text: "Niveles no válidos: tienen que ir de menor a mayor (naranja ≤ amarillo ≤ verde ≤ gris).", ok: false },
+};
 
 export default function Page(props: PageProps<"/professions/[slug]">) {
   return (
@@ -97,12 +107,17 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
 
   return (
     <div className="space-y-4">
-      <div>
+      <div className="flex items-start justify-between gap-3">
+        <div>
         <h1 className="text-xl font-semibold">{recipes[0].profession}</h1>
         <p className="text-xs text-muted">
           {recipes.length.toLocaleString("es-ES")} recetas · {profitable} con beneficio ahora
           {updatedAt && ` · precios de ${new Date(updatedAt).toLocaleString("es-ES", { timeZone: "Europe/Warsaw", dateStyle: "short", timeStyle: "short" })}`}
         </p>
+        </div>
+        <Link href={`/professions/${slug}/plan?house=${house.id}`} className="btn shrink-0 text-sm">
+          Planificar subida
+        </Link>
       </div>
 
       <form action={`/professions/${slug}`} className="flex gap-2">
@@ -126,6 +141,9 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
         ))}
       </div>
 
+      {typeof sp.msg === "string" && MESSAGES[sp.msg] && (
+        <p className={`card text-sm ${MESSAGES[sp.msg].ok ? "text-good" : "text-bad"}`}>{MESSAGES[sp.msg].text}</p>
+      )}
       {!settings.cutConfirmed && (
         <p className="card text-sm text-bad">La comisión de venta de esta casa está sin confirmar: el beneficio se calcula con un 5% provisional.</p>
       )}
@@ -137,7 +155,16 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
         <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
           {rows.map(({ recipe, calc }) => (
             <li key={recipe.id}>
-              <RecipeItem recipe={recipe} calc={calc} houseId={house.id} info={info} recipeName={recipeName} />
+              <RecipeItem
+                recipe={recipe}
+                calc={calc}
+                houseId={house.id}
+                info={info}
+                recipeName={recipeName}
+                offsets={settings.colorOffsets}
+                back={href({})}
+                needToken={adminTokenRequired()}
+              />
             </li>
           ))}
         </ul>
@@ -167,19 +194,29 @@ function RecipeItem({
   houseId,
   info,
   recipeName,
+  offsets,
+  back,
+  needToken,
 }: {
   recipe: RecipeRow;
   calc: CraftResult;
   houseId: number;
   info: ReadonlyMap<number, ItemInfo>;
   recipeName: ReadonlyMap<number, string>;
+  offsets: ColorOffsets;
+  back: string;
+  needToken: boolean;
 }) {
   const profitClass = calc.profit === null ? "text-muted" : calc.profit > 0 ? "text-good" : "text-bad";
   const qty = Number(recipe.yields_qty);
   const product = recipe.yields_item === null ? null : info.get(recipe.yields_item);
   const itemName = (id: number) => info.get(id)?.name ?? `Objeto #${id}`;
   const badge = LIQUIDITY[calc.liquidity];
-  const meta = [recipe.category, recipe.skill_req ? `nivel ${recipe.skill_req}` : null].filter(Boolean).join(" · ");
+  const approx = recipe.skill_source === "estimate" || recipe.skill_source === "classic";
+  const meta = [recipe.category, recipe.skill_req ? `nivel ${recipe.skill_req}${approx ? " aprox." : ""}` : null].filter(Boolean).join(" · ");
+  const colors = recipe.skill_req
+    ? colorsFor({ skillReq: recipe.skill_req, orange: recipe.orange, yellow: recipe.yellow, green: recipe.green, grey: recipe.grey }, offsets)
+    : null;
   const isEnchant = recipe.yields_item === null && recipe.profession_slug === "enchanting";
 
   return (
@@ -259,6 +296,8 @@ function RecipeItem({
         {recipe.yields_item === null && !isEnchant && (
           <p className="text-xs text-muted">La API no indica qué objeto fabrica esta receta, así que no se puede calcular el beneficio.</p>
         )}
+
+        <SkillEditor recipe={recipe} colors={colors} back={back} needToken={needToken} />
       </div>
     </details>
   );
@@ -270,5 +309,68 @@ function Row({ label, value }: { label: string; value: string }) {
       <dt className="text-muted">{label}</dt>
       <dd className="text-right font-mono">{value}</dd>
     </div>
+  );
+}
+
+const COLOR_FIELDS = [
+  { key: "orange", label: "Naranja", className: "text-[#f0933f]" },
+  { key: "yellow", label: "Amarillo", className: "text-[#e5d35b]" },
+  { key: "green", label: "Verde", className: "text-good" },
+  { key: "grey", label: "Gris", className: "text-muted" },
+] as const;
+
+/** Niveles de la receta y formulario para corregirlos con lo que ves en el juego. */
+function SkillEditor({
+  recipe,
+  colors,
+  back,
+  needToken,
+}: {
+  recipe: RecipeRow;
+  colors: { orange: number; yellow: number; green: number; grey: number } | null;
+  back: string;
+  needToken: boolean;
+}) {
+  return (
+    <details className="border-t border-line pt-2 text-xs">
+      <summary className="cursor-pointer py-1 text-muted">
+        Nivel:{" "}
+        {colors ? (
+          <>
+            {COLOR_FIELDS.map((f, i) => (
+              <span key={f.key} className={f.className}>
+                {colors[f.key]}
+                {i < 3 ? " · " : ""}
+              </span>
+            ))}{" "}
+            ({SOURCE[recipe.skill_source ?? "estimate"]}) · corregir
+          </>
+        ) : (
+          "desconocido · añadir"
+        )}
+      </summary>
+      <form action={saveRecipeSkill} className="mt-2 space-y-2">
+        <input type="hidden" name="recipeId" value={recipe.id} />
+        <input type="hidden" name="back" value={back} />
+        <p className="text-muted">Pon los niveles que ves en el juego: desde cuándo es naranja, amarillo, verde y gris.</p>
+        <div className="grid grid-cols-4 gap-2">
+          {COLOR_FIELDS.map((f) => (
+            <label key={f.key}>
+              <span className={f.className}>{f.label}</span>
+              <input className="input mt-1 px-2" type="number" name={f.key} min={1} max={375} defaultValue={colors?.[f.key]} inputMode="numeric" required />
+            </label>
+          ))}
+        </div>
+        {needToken && <input name="token" type="password" required placeholder="Contraseña" className="input" autoComplete="current-password" aria-label="Contraseña de administración" />}
+        <div className="flex gap-2">
+          <button className="btn flex-1">Guardar</button>
+          {recipe.skill_source === "manual" && (
+            <button name="reset" value="1" formNoValidate className="min-h-11 rounded-lg border border-line px-3 text-muted">
+              Quitar corrección
+            </button>
+          )}
+        </div>
+      </form>
+    </details>
   );
 }

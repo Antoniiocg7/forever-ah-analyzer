@@ -47,6 +47,18 @@ export const itemSchema = z.object({
   purchase_price: z.number().optional(),
   item_class: z.object({ name: localized.optional() }).optional(),
   item_subclass: z.object({ name: localized.optional() }).optional(),
+  level: z.number().optional(),
+  required_level: z.number().optional(),
+  // Para objetos que enseñan una receta (planos, patrones…): nivel que piden y qué fabrica.
+  preview_item: z
+    .object({
+      requirements: z
+        .object({ skill: z.object({ profession: z.object({ id: z.number(), name: localized.optional() }), level: z.number() }).optional() })
+        .optional(),
+      recipe: z.object({ item: z.object({ item: z.object({ id: z.number() }) }).optional() }).optional(),
+    })
+    .optional()
+    .catch(undefined),
 });
 
 export const mediaSchema = z.object({

@@ -55,13 +55,14 @@ El resumen diario, el borrado de datos horarios de más de 7 días y de diarios 
 | `pnpm discover` | Fase 0: descarga todas las casas y sus precios de referencia |
 | `pnpm ingest` | Ingesta de las casas marcadas |
 | `pnpm sync-recipes` | Descarga todas las recetas de todas las profesiones (una vez, y tras cada parche) |
+| `pnpm sync-skills` | Nivel de cada receta para el planificador: oficial (planos, patrones) o estimado (después de `sync-recipes`) |
 | `pnpm test` | Tests (Vitest) |
 | `pnpm typecheck` / `pnpm lint` | Comprobaciones |
 
 ## Pendiente de confirmar
 
 - La comisión de la casa neutral (Blackwater): `settings.ah_cut.neutral` está a `null`.
-- La API de recetas no da el nivel de habilidad ni los colores de skill-up.
+- La API de recetas no da el nivel de habilidad ni los colores de skill-up. El planificador usa el nivel oficial de los objetos que enseñan recetas (651 recetas), los de Classic para fundiciones y vendas, y una estimación por nivel de objeto para el resto (±25). Los colores salen de `settings.skillup_colors`. Se corrigen desde la web, en cada receta → Nivel → corregir.
 - Si `buyout` en las subastas de objetos es el precio del lote entero (se ha supuesto que sí, como en Classic).
 - La lista de materiales que vende un vendedor (`items.vendor_sold`, en la migración `20261121000000_ingest_v2.sql`) está hecha a mano con lo de Classic. Si algo no se vende en Forever, pon `vendor_sold = false`.
 
@@ -72,6 +73,7 @@ El resumen diario, el borrado de datos horarios de más de 7 días y de diarios 
 - **Ventas estimadas**: subastas que desaparecen y no pudieron caducar según su `time_left` y el tiempo entre snapshots (con 8 h de hueco solo cuentan las `VERY_LONG`), más las unidades que bajan en los commodities. Se escalan a ventas/día. Las cancelaciones cuentan como ventas: la API no las distingue.
 - **Coste de una receta**: cada material al más barato entre subasta, vendedor y fabricarlo con tus profesiones (`settings.my_professions`), en cadena (mineral → barra → objeto).
 - **Precio de venta**: el menor entre el mínimo actual y la mediana de 7 días, menos la comisión.
+- **Planificador de subida** (`/professions/<profesión>/plan`): programación dinámica por tramos sobre las recetas con nivel y precio. Coste por punto = (materiales − lo que recuperas) / probabilidad de subir (naranja 100%, amarillo 75%, verde 25%), más los planos una vez. Por defecto solo cuenta lo que paga el vendedor; vender en la subasta es opcional (optimista). Compara con el coste usando las medianas de 7 días: ≤85% es buen momento.
 
 ## Medido con datos reales
 

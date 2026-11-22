@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { Loading, SetupNotice } from "@/components/notices";
+import { adminTokenRequired } from "@/lib/admin";
 import { isConfigured } from "@/lib/env";
 import { formatMoney } from "@/lib/money";
 import { allHouses, houseProbes } from "@/lib/queries";
@@ -54,7 +55,7 @@ async function Houses({ searchParams }: Pick<PageProps<"/admin/houses">, "search
   const [sp, houses, probes] = await Promise.all([searchParams, allHouses(), houseProbes()]);
   const msg = typeof sp.msg === "string" ? MESSAGES[sp.msg] : undefined;
   const price = new Map(probes.map((p) => [`${p.house_id}:${p.item_id}`, p.min_buyout]));
-  const needToken = process.env.NODE_ENV === "production";
+  const needToken = adminTokenRequired();
 
   if (houses.length === 0) {
     return (

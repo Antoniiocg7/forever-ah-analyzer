@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../supabase";
 import type { DepositSettings, Market, RecipeInput } from "./craft";
+import { DEFAULT_CHANCES, DEFAULT_OFFSETS, type Chances, type ColorOffsets } from "./leveling";
 
 const PAGE = 1000;
 
@@ -30,6 +31,12 @@ export type RecipeRow = {
   skill_req: number | null;
   yields_item: number | null;
   yields_qty: number;
+  skill_source: "item" | "classic" | "estimate" | "manual" | null;
+  orange: number | null;
+  yellow: number | null;
+  green: number | null;
+  grey: number | null;
+  learned_from_item: number | null;
   recipe_reagents: { item_id: number; qty: number }[];
 };
 
@@ -42,7 +49,9 @@ export async function recipesFor(slugs: string | string[]): Promise<RecipeRow[]>
     const page = unwrap<RecipeRow[]>(
       await supabaseAdmin()
         .from("recipes")
-        .select("id, profession, profession_slug, name_en, category, tier, skill_req, yields_item, yields_qty, recipe_reagents(item_id, qty)")
+        .select(
+          "id, profession, profession_slug, name_en, category, tier, skill_req, skill_source, orange, yellow, green, grey, learned_from_item, yields_item, yields_qty, recipe_reagents(item_id, qty)",
+        )
         .in("profession_slug", list)
         .order("id")
         .range(from, from + PAGE - 1),
@@ -129,12 +138,14 @@ export type EconomySettings = {
   cutConfirmed: boolean;
   deposit: DepositSettings;
   myProfessions: string[];
+  colorOffsets: ColorOffsets;
+  chances: Chances;
 };
 
 /** Comisión de la casa (según su facción), depósito y profesiones del jugador, desde `settings`. */
 export async function economySettings(faction: string): Promise<EconomySettings> {
   const rows = unwrap<{ key: string; value: unknown }[]>(
-    await supabaseAdmin().from("settings").select("key, value").in("key", ["ah_cut", "deposit", "my_professions"]),
+    await supabaseAdmin().from("settings").select("key, value").in("key", ["ah_cut", "deposit", "my_professions", "skillup_colors", "skillup_chance"]),
   );
   const get = (k: string) => rows.find((r) => r.key === k)?.value;
   const cuts = (get("ah_cut") ?? {}) as Record<string, number | null>;
@@ -146,6 +157,8 @@ export async function economySettings(faction: string): Promise<EconomySettings>
     cutConfirmed: typeof cut === "number",
     deposit,
     myProfessions: Array.isArray(mine) ? mine.filter((s): s is string => typeof s === "string") : [],
+    colorOffsets: { ...DEFAULT_OFFSETS, ...((get("skillup_colors") ?? {}) as Partial<ColorOffsets>) },
+    chances: { ...DEFAULT_CHANCES, ...((get("skillup_chance") ?? {}) as Partial<Chances>) },
   };
 }
 
