@@ -1,3 +1,5 @@
+import { marketActivity } from "../pricing/activity";
+
 /** Datos de mercado de un objeto en una casa. Precios en cobre. */
 export type Market = {
   /** Precio mínimo ahora. null = nada en venta. */
@@ -80,7 +82,7 @@ function cheapest(itemId: number, markets: ReadonlyMap<number, Market>, crafted:
 
 export type ReagentLine = { itemId: number; qty: number; acquire: Acquire | null; total: number | null };
 
-export type Liquidity = "ok" | "thin" | "none" | "unknown";
+export type Liquidity = "high" | "ok" | "thin" | "none" | "unknown";
 
 export type CraftResult = {
   lines: ReagentLine[];
@@ -168,13 +170,15 @@ export function craftEconomics(
 
 /**
  * ¿Se puede vender de verdad? Vender a un vendedor siempre es seguro.
- * - none: nada en venta ni ventas estimadas.
- * - thin: 1–2 subastas y menos de 1 venta/día estimada: el precio puede ser de un solo vendedor.
+ * Con ventas estimadas usa el nivel de mercado (marketActivity): mucho → high, normal → ok, poco → thin.
+ * Sin ventas: none si no hay nada en venta; thin si hay 1–2 subastas (precio de un solo vendedor).
  */
 export function liquidityOf(m: Market | null, sellVia: CraftResult["sellVia"] = "ah"): Liquidity {
   if (sellVia === "vendor") return "ok";
   if (!m || (m.qty === 0 && !m.soldPerDay)) return "none";
-  if (m.soldPerDay !== null && m.soldPerDay >= 1) return "ok";
-  if (m.numAuctions <= 2) return "thin";
-  return m.soldPerDay === null ? "unknown" : "ok";
+  const activity = marketActivity(m.soldPerDay, m.qty);
+  if (activity === "high") return "high";
+  if (activity === "normal") return "ok";
+  if (activity === "low") return "thin";
+  return m.numAuctions <= 2 ? "thin" : "unknown";
 }

@@ -149,4 +149,4 @@ export function cheapestRoute(from: number, to: number, recipes: RouteRecipe[], 
  * Probabilidad de vender el producto según su liquidez, para descontar del coste lo que esperas
  * recuperar. Venderlo a un vendedor es seguro y se cuenta aparte.
  */
-export const SALE_PROBABILITY = { ok: 0.7, unknown: 0.4, thin: 0.15, none: 0 } as const;
+export const SALE_PROBABILITY = { high: 0.85, ok: 0.7, unknown: 0.4, thin: 0.15, none: 0 } as const;

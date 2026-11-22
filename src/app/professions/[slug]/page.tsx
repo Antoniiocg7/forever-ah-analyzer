@@ -19,6 +19,7 @@ const SORTS = { profit: "Beneficio", margin: "Margen", cost: "Coste", name: "Nom
 type Sort = keyof typeof SORTS;
 
 const LIQUIDITY: Record<Liquidity, { label: string; className: string } | null> = {
+  high: { label: "mucho mercado", className: "border-good/60 text-good" },
   ok: null,
   unknown: null,
   thin: { label: "poco mercado", className: "border-bad text-bad" },
@@ -92,7 +93,7 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
   const rows = all.filter(
     ({ recipe, calc }) =>
       (!q || [recipe.name_en, recipe.name_es].some((n) => n?.toLowerCase().includes(q.toLowerCase()))) &&
-      (!reliable || (calc.profit !== null && calc.profit > 0 && (calc.liquidity === "ok" || calc.liquidity === "unknown"))),
+      (!reliable || (calc.profit !== null && calc.profit > 0 && (calc.liquidity === "high" || calc.liquidity === "ok" || calc.liquidity === "unknown"))),
   );
 
   if (sort === "name") rows.sort((a, b) => recipeTitle(a.recipe).localeCompare(recipeTitle(b.recipe)));
@@ -189,8 +190,8 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
           vendedor si paga más. El depósito no se resta porque se recupera al vender.
         </p>
         <p>
-          <b>Poco mercado</b>: el producto tiene 1–2 subastas y menos de una venta al día estimada; su precio puede ser el de un solo
-          vendedor.
+          <b>Mucho mercado</b>: el producto se vende mucho (≥ 500 al día, o ≥ 20 y rota la mitad de su stock al día). <b>Poco mercado</b>:
+          menos de 5 ventas al día, o 1–2 subastas sin datos de ventas; su precio puede ser el de un solo vendedor. Las ventas son estimadas.
         </p>
       </div>
     </div>
@@ -242,7 +243,12 @@ function RecipeItem({
             </p>
             <p className="flex items-center gap-2 truncate text-xs text-muted">
               {badge && <span className={`shrink-0 rounded border px-1 ${badge.className}`}>{badge.label}</span>}
-              {calc.product?.soldPerDay != null && <span className="shrink-0">≈{calc.product.soldPerDay}/día</span>}
+              {calc.product?.soldPerDay != null && (
+                <span className="shrink-0 font-mono text-fg">
+                  ≈{calc.product.soldPerDay.toLocaleString("es-ES")}
+                  <span className="font-sans text-muted"> vendidos/día</span>
+                </span>
+              )}
               <span className="truncate">{meta}</span>
             </p>
           </div>

@@ -57,4 +57,8 @@ export type LatestPriceRow = {
   trend: number | null;
   class: string | null;
   subclass: string | null;
+  /** De dónde salen las ventas/día: media de la semana o últimas 24 h. */
+  sold_source: "week" | "24h" | null;
+  sold_hours: number | null;
+  activity: "high" | "normal" | "low" | null;
 };

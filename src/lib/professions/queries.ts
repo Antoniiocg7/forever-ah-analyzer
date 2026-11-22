@@ -85,7 +85,7 @@ type ItemRow = {
   vendor_buy: number | null;
   vendor_sold: boolean;
 };
-type PriceRow = { item_id: number; min_buyout: number; p15_market: number; qty: number; num_auctions: number; fetched_at: string };
+type PriceRow = { item_id: number; min_buyout: number; p15_market: number; qty: number; num_auctions: number; fetched_at: string; sold_24h: number | null };
 type StatRow = { item_id: number; market_7d: number | null; sold_per_day: number | null };
 
 /** Mercado (precio actual, mediana de 7 días, ventas estimadas, vendedor) e info de un conjunto de objetos. */
@@ -99,7 +99,7 @@ export async function marketData(houseId: number, itemIds: number[]) {
     chunks(itemIds, 300).map(async (part) => {
       const [items, prices, stats] = await Promise.all([
         db.from("items").select("id, name_en, name_es, quality, icon_url, vendor_sell, vendor_buy, vendor_sold").in("id", part),
-        db.from("item_prices_latest").select("item_id, min_buyout, p15_market, qty, num_auctions, fetched_at").eq("house_id", houseId).in("item_id", part),
+        db.from("item_prices_latest").select("item_id, min_buyout, p15_market, qty, num_auctions, fetched_at, sold_24h").eq("house_id", houseId).in("item_id", part),
         db.from("item_market_7d").select("item_id, market_7d, sold_per_day").eq("house_id", houseId).in("item_id", part),
       ]);
       return { items: unwrap<ItemRow[]>(items), prices: unwrap<PriceRow[]>(prices), stats: unwrap<StatRow[]>(stats) };
@@ -129,7 +129,8 @@ export async function marketData(houseId: number, itemIds: number[]) {
       market7d: stat?.market_7d ?? null,
       qty: price?.qty ?? 0,
       numAuctions: price?.num_auctions ?? 0,
-      soldPerDay: stat?.sold_per_day ?? null,
+      // Media de la semana; si aún no hay, la estimación de las últimas 24 h.
+      soldPerDay: stat?.sold_per_day ?? price?.sold_24h ?? null,
       vendorBuy: item?.vendor_sold ? item.vendor_buy : null,
       vendorSell: item?.vendor_sell || null,
     });

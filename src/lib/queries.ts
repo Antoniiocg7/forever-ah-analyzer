@@ -21,8 +21,35 @@ export async function houseProbes(): Promise<ProbeRow[]> {
   return unwrap(await supabaseAdmin().from("house_probe").select("house_id, item_id, min_buyout, qty"));
 }
 
-export const PRICE_SORTS = { sold: "Más vendidos", deals: "Por debajo de su precio", stock: "Más stock" } as const;
+export const PRICE_SORTS = {
+  sold: "Más vendidos",
+  sold_asc: "Menos vendidos",
+  deals: "Por debajo de su precio",
+  price_desc: "Más caros",
+  price_asc: "Más baratos",
+  rising: "Subiendo esta semana",
+  falling: "Bajando esta semana",
+  stock: "Más stock",
+  name: "Nombre",
+} as const;
 export type PriceSort = keyof typeof PRICE_SORTS;
+
+/** Tipos de objeto (clase en inglés, como la guarda la API) para filtrar la lista. */
+export const ITEM_CLASSES = ["Trade Goods", "Consumable", "Reagent", "Gem", "Recipe", "Armor", "Weapon", "Container", "Projectile", "Quiver", "Miscellaneous", "Quest"] as const;
+
+export type PriceFilters = {
+  q?: string;
+  sort?: PriceSort;
+  /** Clase de objeto (ITEM_CLASSES). */
+  cls?: string;
+  activity?: "high" | "normal" | "low";
+  minPrice?: number | null;
+  maxPrice?: number | null;
+  page?: number;
+  lang?: "en" | "es";
+};
+
+export const PAGE_SIZE = 50;
 
 /** Mercado mínimo (de settings.deals) para que un objeto cuente como ganga: evita la morralla de cobre. */
 async function dealsMinMarket(): Promise<number> {
@@ -32,30 +59,51 @@ async function dealsMinMarket(): Promise<number> {
   return row?.value?.min_market ?? 10000;
 }
 
-/**
- * Lista de precios de una casa.
- * - sold: más vendidos (ventas estimadas/día); sin estimación, por stock.
- * - deals: mínimo actual al menos un 10% por debajo de su mediana de 7 días.
- * - stock: más unidades en venta.
- */
-export async function searchPrices(houseId: number, q: string, sort: PriceSort = "sold"): Promise<LatestPriceRow[]> {
+/** Lista de precios de una casa con búsqueda, filtros y orden. Devuelve una página de PAGE_SIZE + 1 (para saber si hay más). */
+export async function searchPrices(houseId: number, f: PriceFilters = {}): Promise<LatestPriceRow[]> {
   let query = supabaseAdmin().from("latest_item_prices").select("*").eq("house_id", houseId);
-  const term = q.trim();
+  const term = (f.q ?? "").trim();
   if (/^\d+$/.test(term)) query = query.eq("item_id", Number(term));
   else if (term) {
     // Busca en inglés y en español a la vez. Se quitan los caracteres que rompen el filtro `or`.
     const safe = term.replace(/[,()*%_\\]/g, " ").trim();
     if (safe) query = query.or(`name_en.ilike.*${safe}*,name_es.ilike.*${safe}*`);
   }
+  if (f.cls && (ITEM_CLASSES as readonly string[]).includes(f.cls)) query = query.eq("class", f.cls);
+  if (f.activity) query = query.eq("activity", f.activity);
+  if (f.minPrice) query = query.gte("min_buyout", f.minPrice);
+  if (f.maxPrice) query = query.lte("min_buyout", f.maxPrice);
 
-  if (sort === "deals") {
-    query = query.gte("discount", 0.1).gte("market_7d", await dealsMinMarket()).order("discount", { ascending: false });
-  } else if (sort === "sold") {
-    query = query.order("sold_per_day", { ascending: false, nullsFirst: false }).order("qty", { ascending: false });
-  } else {
-    query = query.order("qty", { ascending: false });
+  switch (f.sort ?? "sold") {
+    case "deals":
+      query = query.gte("discount", 0.1).gte("market_7d", await dealsMinMarket()).order("discount", { ascending: false });
+      break;
+    case "sold_asc":
+      query = query.not("sold_per_day", "is", null).order("sold_per_day", { ascending: true }).order("qty", { ascending: false });
+      break;
+    case "price_desc":
+      query = query.order("min_buyout", { ascending: false });
+      break;
+    case "price_asc":
+      query = query.order("min_buyout", { ascending: true });
+      break;
+    case "rising":
+      query = query.not("trend", "is", null).order("trend", { ascending: false });
+      break;
+    case "falling":
+      query = query.not("trend", "is", null).order("trend", { ascending: true });
+      break;
+    case "stock":
+      query = query.order("qty", { ascending: false });
+      break;
+    case "name":
+      query = query.not(f.lang === "es" ? "name_es" : "name_en", "is", null).order(f.lang === "es" ? "name_es" : "name_en", { ascending: true });
+      break;
+    default:
+      query = query.order("sold_per_day", { ascending: false, nullsFirst: false }).order("qty", { ascending: false });
   }
-  return unwrap(await query.limit(50));
+  const from = Math.max(0, (f.page ?? 0) * PAGE_SIZE);
+  return unwrap(await query.range(from, from + PAGE_SIZE));
 }
 
 export async function latestPrice(houseId: number, itemId: number): Promise<LatestPriceRow | null> {

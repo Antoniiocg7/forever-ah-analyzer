@@ -63,7 +63,7 @@ describe("craftEconomics", () => {
     expect(r.sellUnit).toBe(3000);
     expect(r.ahRevenue).toBe(2850);
     expect(r.profit).toBe(2250);
-    expect(r.liquidity).toBe("ok");
+    expect(r.liquidity).toBe("high"); // 50 ventas/día con 100 en venta: rota la mitad del stock al día
   });
 
   it("no usa la propia receta como fuente de su material", () => {
@@ -105,7 +105,10 @@ describe("liquidityOf", () => {
     expect(liquidityOf(null)).toBe("none");
     expect(liquidityOf(m({ qty: 0, soldPerDay: null }))).toBe("none");
     expect(liquidityOf(m({ numAuctions: 1, soldPerDay: 0 }))).toBe("thin");
-    expect(liquidityOf(m({ numAuctions: 1, soldPerDay: 3 }))).toBe("ok");
+    expect(liquidityOf(m({ numAuctions: 1, soldPerDay: 3 }))).toBe("thin");
+    expect(liquidityOf(m({ numAuctions: 4, soldPerDay: 8 }))).toBe("ok");
+    expect(liquidityOf(m({ qty: 30, soldPerDay: 40 }))).toBe("high");
     expect(liquidityOf(m({ numAuctions: 9, soldPerDay: null }))).toBe("unknown");
+    expect(liquidityOf(m({ numAuctions: 1, soldPerDay: null }))).toBe("thin");
   });
 });

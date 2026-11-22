@@ -11,6 +11,7 @@ import { isConfigured } from "@/lib/env";
 import { pick, type Lang } from "@/lib/lang";
 import { nameLang } from "@/lib/lang-server";
 import { formatMoney } from "@/lib/money";
+import { ACTIVITY_CLASS, ACTIVITY_LABEL } from "@/lib/pricing/activity";
 import { scoreDeal } from "@/lib/pricing/deals";
 import { trackedHouses } from "@/lib/queries";
 import type { LatestPriceRow } from "@/lib/supabase";
@@ -226,6 +227,9 @@ function ItemTitle({ row: r, lang }: { row: LatestPriceRow; lang: Lang }) {
     <span className="flex min-w-0 items-center gap-3">
       <ItemIcon src={r.icon_url} quality={r.quality} />
       <span className={`truncate font-medium q-${r.quality ?? "COMMON"}`}>{pick(r.name_en, r.name_es, lang) ?? `Objeto #${r.item_id}`}</span>
+      {r.activity && r.activity !== "normal" && (
+        <span className={`shrink-0 rounded border px-1.5 py-px text-[11px] ${ACTIVITY_CLASS[r.activity]}`}>{ACTIVITY_LABEL[r.activity]}</span>
+      )}
     </span>
   );
 }
