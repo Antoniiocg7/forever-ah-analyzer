@@ -99,11 +99,40 @@ describe("estimateSales", () => {
   });
 });
 
+describe("estimateSales: recolocaciones", () => {
+  const HOUR = 3_600_000;
+  it("no cuenta como venta una subasta cancelada para rebajarla (más cara que el mínimo de ahora)", () => {
+    const prev: CompactAuction[] = [
+      [1, 2770, 10, "VERY_LONG", 100], // comprada: la más barata
+      [2, 2770, 10, "VERY_LONG", 150], // cancelada y vuelta a publicar a 120
+    ];
+    const curr = [listing(3, 2770, 10, 120), listing(4, 2770, 5, 130)];
+    expect(estimateSales(prev, curr, HOUR)!.get(2770)).toBe(10);
+  });
+
+  it("si el objeto se agota, todo lo desaparecido cuenta", () => {
+    const prev: CompactAuction[] = [[1, 2770, 10, "VERY_LONG", 100], [2, 2770, 5, "LONG", 300]];
+    expect(estimateSales(prev, [], HOUR)!.get(2770)).toBe(15);
+  });
+
+  it("las compras parciales de commodities cuentan aunque el precio sea alto", () => {
+    const prev: CompactAuction[] = [[1, 2770, 10, "SHORT", 500]];
+    expect(estimateSales(prev, [listing(1, 2770, 4, 500), listing(2, 2770, 50, 90)], HOUR)!.get(2770)).toBe(6);
+  });
+
+  it("las subastas solo con puja no se cuentan; los estados antiguos sin precio sí", () => {
+    const prev: CompactAuction[] = [[1, 2770, 3, "VERY_LONG", null], [2, 2771, 4, "VERY_LONG"]];
+    const sold = estimateSales(prev, [listing(9, 2770, 1, 50), listing(8, 2771, 1, 50)], HOUR)!;
+    expect(sold.has(2770)).toBe(false);
+    expect(sold.get(2771)).toBe(4);
+  });
+});
+
 describe("encodeState / decodeState", () => {
   it("ida y vuelta sin pérdidas", () => {
     const state: CompactAuction[] = [
-      [1, 2770, 20, "VERY_LONG"],
-      [2, 2840, 3, "SHORT"],
+      [1, 2770, 20, "VERY_LONG", 150],
+      [2, 2840, 3, "SHORT", null],
     ];
     expect(decodeState(encodeState(state))).toEqual(state);
   });

@@ -2,11 +2,14 @@ import { gunzipSync, gzipSync } from "node:zlib";
 import type { Listing } from "../blizzard/client";
 import type { TimeLeft } from "../blizzard/schemas";
 
-/** Estado compacto de una subasta: [auctionId, itemId, qty, timeLeft]. */
-export type CompactAuction = [number, number, number, TimeLeft];
+/**
+ * Estado compacto de una subasta: [auctionId, itemId, qty, timeLeft, precio unitario].
+ * El precio (null = solo puja) falta en estados guardados antes del 22-11-2026.
+ */
+export type CompactAuction = [number, number, number, TimeLeft, (number | null)?];
 
 export const toCompact = (listings: Listing[]): CompactAuction[] =>
-  listings.map((l) => [l.auctionId, l.itemId, l.qty, l.timeLeft]);
+  listings.map((l) => [l.auctionId, l.itemId, l.qty, l.timeLeft, l.unitPrice]);
 
 /** Codifica el estado como gzip+base64: ~270k subastas caben en ~2 MB y se guardan en milisegundos. */
 export const encodeState = (auctions: CompactAuction[]): string => gzipSync(JSON.stringify(auctions)).toString("base64");
@@ -30,9 +33,13 @@ export const MAX_GAP_MS = MIN_REMAINING_MS.VERY_LONG;
 
 /**
  * ESTIMACIÓN de unidades vendidas por objeto entre dos snapshots separados `gapMs`.
- * - Subasta que desaparece y aún le quedaba más tiempo que el hueco → no pudo caducar: se cuenta
- *   como vendida (también cuenta una cancelación; la API no permite distinguirlas).
- * - Subasta que sigue pero con menos unidades (commodities) → la diferencia se cuenta como vendida.
+ * - Subasta que sigue pero con menos unidades (commodities) → la diferencia se cuenta como vendida:
+ *   una compra parcial no puede ser una cancelación.
+ * - Subasta que desaparece y aún le quedaba más tiempo que el hueco (no pudo caducar) → vendida solo
+ *   si su precio no superaba el mínimo que queda ahora. Quien compra se lleva lo más barato; quien
+ *   cancela para volver a publicar más barato lo hace porque le han rebajado, o sea, su subasta ya no
+ *   era la más barata. Sin este filtro las recolocaciones inflaban las ventas (Copper Ore salía a
+ *   27.000/día con 4.800 en venta). Si el objeto se ha agotado, cuenta.
  * - Subasta que desaparece y pudo caducar en el hueco → no se cuenta.
  * Devuelve null si el hueco es demasiado grande para estimar nada.
  */
@@ -40,15 +47,25 @@ export function estimateSales(prev: CompactAuction[], curr: Listing[], gapMs: nu
   if (!(gapMs > 0) || gapMs > MAX_GAP_MS) return null;
 
   const current = new Map<number, number>();
-  for (const l of curr) current.set(l.auctionId, l.qty);
+  const minNow = new Map<number, number>();
+  for (const l of curr) {
+    current.set(l.auctionId, l.qty);
+    if (l.unitPrice !== null) {
+      const m = minNow.get(l.itemId);
+      if (m === undefined || l.unitPrice < m) minNow.set(l.itemId, l.unitPrice);
+    }
+  }
 
   const sold = new Map<number, number>();
   const add = (itemId: number, n: number) => sold.set(itemId, (sold.get(itemId) ?? 0) + n);
 
-  for (const [auctionId, itemId, qty, timeLeft] of prev) {
+  for (const [auctionId, itemId, qty, timeLeft, price] of prev) {
     const nowQty = current.get(auctionId);
     if (nowQty === undefined) {
-      if ((MIN_REMAINING_MS[timeLeft] ?? 0) > gapMs) add(itemId, qty);
+      if ((MIN_REMAINING_MS[timeLeft] ?? 0) <= gapMs) continue; // pudo caducar
+      if (price === null) continue; // solo puja: no se puede comprar directamente
+      const min = minNow.get(itemId);
+      if (price === undefined || min === undefined || price <= min) add(itemId, qty);
     } else if (nowQty < qty) {
       add(itemId, qty - nowQty);
     }

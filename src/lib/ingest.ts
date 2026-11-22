@@ -146,6 +146,8 @@ export async function ingestHouse(
     }));
     for (const part of chunks(latest, CHUNK)) await must(db.from("item_prices_latest").upsert(part));
     await must(db.from("item_prices_latest").delete().eq("house_id", houseId).neq("snapshot_id", snapshot.id));
+    // Ventas de las últimas 24 h (para mostrar ventas/día sin esperar a la media semanal).
+    await must(db.rpc("refresh_recent_sales", { p_house: houseId }));
 
     await must(
       db.from("house_state").upsert({
