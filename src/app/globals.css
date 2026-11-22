@@ -18,6 +18,17 @@
   color-scheme: dark;
 }
 
+/* Tailwind 4 quita el cursor de mano a los botones: se recupera para todo lo que se puede pulsar. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  summary,
+  select,
+  label:has(> input[type="checkbox"]) {
+    cursor: pointer;
+  }
+}
+
 body {
   background: var(--color-bg);
   color: var(--color-fg);
