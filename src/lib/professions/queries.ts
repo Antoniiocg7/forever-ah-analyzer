@@ -1,3 +1,4 @@
+import { browserProfessions } from "../prefs";
 import { supabaseAdmin } from "../supabase";
 import type { DepositSettings, Market, RecipeInput } from "./craft";
 import { DEFAULT_CHANCES, DEFAULT_OFFSETS, type Chances, type ColorOffsets } from "./leveling";
@@ -137,7 +138,9 @@ export type EconomySettings = {
   cut: number;
   cutConfirmed: boolean;
   deposit: DepositSettings;
+  /** Las del navegador si las ha elegido; si no, las de `settings.my_professions`. */
   myProfessions: string[];
+  myProfessionsFromBrowser: boolean;
   colorOffsets: ColorOffsets;
   chances: Chances;
 };
@@ -152,11 +155,13 @@ export async function economySettings(faction: string): Promise<EconomySettings>
   const cut = cuts[faction];
   const deposit = (get("deposit") ?? { deposit_min: 100, pct: { "2": 0.05, "8": 0.2, "24": 0.6 } }) as DepositSettings;
   const mine = get("my_professions");
+  const fromBrowser = await browserProfessions();
   return {
     cut: typeof cut === "number" ? cut : 0.05,
     cutConfirmed: typeof cut === "number",
     deposit,
-    myProfessions: Array.isArray(mine) ? mine.filter((s): s is string => typeof s === "string") : [],
+    myProfessions: fromBrowser ?? (Array.isArray(mine) ? mine.filter((s): s is string => typeof s === "string") : []),
+    myProfessionsFromBrowser: fromBrowser !== null,
     colorOffsets: { ...DEFAULT_OFFSETS, ...((get("skillup_colors") ?? {}) as Partial<ColorOffsets>) },
     chances: { ...DEFAULT_CHANCES, ...((get("skillup_chance") ?? {}) as Partial<Chances>) },
   };

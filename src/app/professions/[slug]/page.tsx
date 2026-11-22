@@ -173,7 +173,11 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
       <div className="space-y-1 text-xs text-muted">
         <p>
           <b>Coste</b>: cada material al precio más bajo entre la subasta (mercado actual), un vendedor y fabricarlo tú con tus
-          profesiones ({settings.myProfessions.join(", ") || "ninguna configurada"}).
+          profesiones ({settings.myProfessions.join(", ") || "ninguna elegida"}; se cambian en{" "}
+          <Link href="/professions" className="underline">
+            Profesiones → Mis profesiones
+          </Link>
+          ).
         </p>
         <p>
           <b>Venta</b>: el menor entre el mínimo actual y la mediana de 7 días, menos la comisión del {Math.round(settings.cut * 100)}%; o a un

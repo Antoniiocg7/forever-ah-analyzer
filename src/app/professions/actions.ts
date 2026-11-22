@@ -1,7 +1,9 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { adminTokenOk } from "@/lib/admin";
+import { MY_PROFESSIONS_COOKIE, parseProfessions } from "@/lib/prefs";
 import { MAX_SKILL } from "@/lib/professions/leveling";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -35,4 +37,17 @@ export async function saveRecipeSkill(formData: FormData) {
   const { error } = await db.from("recipes").update({ skill_req: orange, orange, yellow, green, grey, skill_source: "manual" }).eq("id", id);
   if (error) throw new Error(error.message);
   redirect(`${safeBack}${sep}msg=ok`);
+}
+
+/** Guarda en este navegador qué profesiones tienes (no pide contraseña: no cambia nada para los demás). */
+export async function saveMyProfessions(formData: FormData) {
+  const chosen = parseProfessions(formData.getAll("p").map(String).join(",")) ?? [];
+  (await cookies()).set(MY_PROFESSIONS_COOKIE, chosen.join(","), {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "lax",
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+  });
+  redirect("/professions?msg=guardado");
 }
