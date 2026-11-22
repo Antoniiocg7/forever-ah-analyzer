@@ -8,6 +8,8 @@ import { Loading, NoHousesNotice, SetupNotice } from "@/components/notices";
 import { CATEGORY_LABEL, categorize, gameContext, type Category } from "@/lib/calendar";
 import { calendarEvents, dealSettings, flipCandidates, marketableItems, vendorFlips } from "@/lib/deals-queries";
 import { isConfigured } from "@/lib/env";
+import { pick, type Lang } from "@/lib/lang";
+import { nameLang } from "@/lib/lang-server";
 import { formatMoney } from "@/lib/money";
 import { scoreDeal } from "@/lib/pricing/deals";
 import { trackedHouses } from "@/lib/queries";
@@ -64,6 +66,7 @@ async function Deals({ searchParams }: Pick<PageProps<"/deals">, "searchParams">
 // ---------------------------------------------------------------------------------------------
 
 async function FlipList({ houseId, faction }: { houseId: number; faction: string }) {
+  const lang = await nameLang();
   const s = await dealSettings(faction);
   const rows = (await flipCandidates(houseId, s))
     .map((r) => ({
@@ -92,7 +95,7 @@ async function FlipList({ houseId, faction }: { houseId: number; faction: string
             <li key={r.item_id}>
               <Link href={`/item/${r.item_id}?house=${houseId}`} className="block space-y-1 px-4 py-3 active:bg-surface-2">
                 <div className="flex items-center justify-between gap-3">
-                  <ItemTitle row={r} />
+                  <ItemTitle row={r} lang={lang} />
                   <div className="shrink-0 text-right font-mono text-sm">
                     <p className="text-good">+{formatMoney(deal.depthProfit)}</p>
                     <p className="text-xs text-muted">−{Math.round(deal.discount * 100)}%</p>
@@ -117,6 +120,7 @@ async function FlipList({ houseId, faction }: { houseId: number; faction: string
 }
 
 async function VendorList({ houseId }: { houseId: number }) {
+  const lang = await nameLang();
   const rows = await vendorFlips(houseId);
   return (
     <>
@@ -128,7 +132,7 @@ async function VendorList({ houseId }: { houseId: number }) {
             <li key={r.item_id}>
               <Link href={`/item/${r.item_id}?house=${houseId}`} className="flex items-center justify-between gap-3 px-4 py-3 active:bg-surface-2">
                 <div className="min-w-0">
-                  <ItemTitle row={r} />
+                  <ItemTitle row={r} lang={lang} />
                   <p className="mt-1 text-xs text-muted">
                     {r.vendor_units} uds desde {formatMoney(r.min_buyout)} · el vendedor paga {formatMoney(r.vendor_sell)}
                   </p>
@@ -160,6 +164,7 @@ function adviceFor(r: LatestPriceRow, raidSoon: boolean): Advice {
 }
 
 async function InvestList({ houseId }: { houseId: number }) {
+  const lang = await nameLang();
   const [items, events] = await Promise.all([marketableItems(houseId), calendarEvents()]);
   const ctx = gameContext(events);
   const raid = events.find((e) => e.kind === "raid" && ctx.next?.date === e.date);
@@ -193,7 +198,7 @@ async function InvestList({ houseId }: { houseId: number }) {
                 <li key={r.item_id}>
                   <Link href={`/item/${r.item_id}?house=${houseId}`} className="flex items-center justify-between gap-3 px-4 py-3 active:bg-surface-2">
                     <div className="min-w-0">
-                      <ItemTitle row={r} />
+                      <ItemTitle row={r} lang={lang} />
                       <p className="mt-1 text-xs text-muted">
                         <span className={advice.className}>{advice.label}</span> · mediana {formatMoney(r.market_7d)}
                         {r.trend !== null && ` · semana ${r.trend >= 0 ? "+" : "−"}${Math.abs(Math.round(r.trend * 100))}%`}
@@ -224,11 +229,11 @@ async function InvestList({ houseId }: { houseId: number }) {
   );
 }
 
-function ItemTitle({ row: r }: { row: LatestPriceRow }) {
+function ItemTitle({ row: r, lang }: { row: LatestPriceRow; lang: Lang }) {
   return (
     <span className="flex min-w-0 items-center gap-3">
       <ItemIcon src={r.icon_url} quality={r.quality} />
-      <span className={`truncate font-medium q-${r.quality ?? "COMMON"}`}>{r.name_en ?? `Objeto #${r.item_id}`}</span>
+      <span className={`truncate font-medium q-${r.quality ?? "COMMON"}`}>{pick(r.name_en, r.name_es, lang) ?? `Objeto #${r.item_id}`}</span>
     </span>
   );
 }

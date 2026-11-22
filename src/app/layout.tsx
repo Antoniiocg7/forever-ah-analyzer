@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import { Suspense } from "react";
 import { IngestStatus } from "@/components/IngestStatus";
+import { LangToggle, LangToggleView } from "@/components/LangToggle";
 import { BottomNav, BottomNavFallback, TopNav, TopNavFallback } from "@/components/Nav";
 import "./globals.css";
 
@@ -30,9 +31,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 <IngestStatus />
               </Suspense>
             </div>
-            <Suspense fallback={<TopNavFallback />}>
-              <TopNav />
-            </Suspense>
+            <div className="flex items-center gap-4">
+              <Suspense fallback={<TopNavFallback />}>
+                <TopNav />
+              </Suspense>
+              <Suspense fallback={<LangToggleView lang={null} />}>
+                <LangToggle />
+              </Suspense>
+            </div>
           </div>
         </header>
         <main className="mx-auto w-full max-w-3xl px-4 pt-5 pb-24 sm:pb-8">{children}</main>

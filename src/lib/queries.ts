@@ -42,7 +42,11 @@ export async function searchPrices(houseId: number, q: string, sort: PriceSort =
   let query = supabaseAdmin().from("latest_item_prices").select("*").eq("house_id", houseId);
   const term = q.trim();
   if (/^\d+$/.test(term)) query = query.eq("item_id", Number(term));
-  else if (term) query = query.ilike("name_en", `%${term.replace(/[%_\\]/g, "\\$&")}%`);
+  else if (term) {
+    // Busca en inglés y en español a la vez. Se quitan los caracteres que rompen el filtro `or`.
+    const safe = term.replace(/[,()*%_\\]/g, " ").trim();
+    if (safe) query = query.or(`name_en.ilike.*${safe}*,name_es.ilike.*${safe}*`);
+  }
 
   if (sort === "deals") {
     query = query.gte("discount", 0.1).gte("market_7d", await dealsMinMarket()).order("discount", { ascending: false });
@@ -63,6 +67,7 @@ export async function latestPrice(houseId: number, itemId: number): Promise<Late
 export type ItemRow = {
   id: number;
   name_en: string | null;
+  name_es: string | null;
   quality: string | null;
   icon_url: string | null;
   vendor_sell: number | null;
@@ -74,7 +79,7 @@ export type ItemRow = {
 
 export async function itemById(itemId: number): Promise<ItemRow | null> {
   return unwrap(
-    await supabaseAdmin().from("items").select("id, name_en, quality, icon_url, vendor_sell, vendor_buy, vendor_sold, class, subclass").eq("id", itemId).maybeSingle(),
+    await supabaseAdmin().from("items").select("id, name_en, name_es, quality, icon_url, vendor_sell, vendor_buy, vendor_sold, class, subclass").eq("id", itemId).maybeSingle(),
   );
 }
 

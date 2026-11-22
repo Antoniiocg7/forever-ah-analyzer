@@ -6,6 +6,8 @@ import { ItemIcon } from "@/components/ItemIcon";
 import { Loading, NoHousesNotice, SetupNotice } from "@/components/notices";
 import { PriceChart } from "@/components/PriceChart";
 import { isConfigured } from "@/lib/env";
+import { pick, wowheadItemUrl, type Lang } from "@/lib/lang";
+import { nameLang } from "@/lib/lang-server";
 import { formatMoney } from "@/lib/money";
 import { recipesForItem, type RecipeLink } from "@/lib/professions/queries";
 import { dailySeries, hourlySeries, itemById, latestPrice, trackedHouses } from "@/lib/queries";
@@ -33,12 +35,13 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
   if (houses.length === 0) return <NoHousesNotice />;
   const house = houses.find((h) => String(h.id) === sp.house) ?? houses[0];
 
-  const [item, latest, hourly, daily, recipes] = await Promise.all([
+  const [item, latest, hourly, daily, recipes, lang] = await Promise.all([
     itemById(itemId),
     latestPrice(house.id, itemId),
     hourlySeries(house.id, itemId),
     dailySeries(house.id, itemId),
     recipesForItem(itemId),
+    nameLang(),
   ]);
 
   // Ventas por día: media de 7 días ya calculada; si no hay, la de los días disponibles.
@@ -65,12 +68,21 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
       <div>
         <h1 className={`flex items-center gap-3 text-xl font-semibold q-${item?.quality ?? "COMMON"}`}>
           <ItemIcon src={item?.icon_url || null} quality={item?.quality} size={36} />
-          {item?.name_en ?? `Objeto #${itemId}`}
+          {pick(item?.name_en, item?.name_es, lang) ?? `Objeto #${itemId}`}
         </h1>
         <p className="text-xs text-muted">
           ID {itemId}
           {item?.class && ` · ${item.class}${item.subclass ? ` / ${item.subclass}` : ""}`}
+          {lang === "es" && item?.name_es && item.name_en && ` · ${item.name_en}`}
         </p>
+        <a
+          href={wowheadItemUrl(itemId, lang)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line px-3 text-sm text-muted hover:text-fg"
+        >
+          Ver en Wowhead ↗
+        </a>
       </div>
 
       <HouseTabs houses={houses} current={house.id} hrefFor={(h) => `/item/${itemId}?house=${h}`} />
@@ -88,8 +100,8 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
 
       <PriceChart hourly={hourly} daily={daily} />
 
-      <RecipeList title="Se fabrica con" recipes={recipes.makes} houseId={house.id} />
-      <RecipeList title="Se usa en" recipes={recipes.uses} houseId={house.id} showQty />
+      <RecipeList title="Se fabrica con" recipes={recipes.makes} houseId={house.id} lang={lang} />
+      <RecipeList title="Se usa en" recipes={recipes.uses} houseId={house.id} lang={lang} showQty />
 
       <p className="text-xs text-muted">
         “Mercado” es la media del 15% de unidades más baratas. Las ventas son una estimación por diferencia entre snapshots: la
@@ -99,7 +111,7 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
   );
 }
 
-function RecipeList({ title, recipes, houseId, showQty }: { title: string; recipes: RecipeLink[]; houseId: number; showQty?: boolean }) {
+function RecipeList({ title, recipes, houseId, lang, showQty }: { title: string; recipes: RecipeLink[]; houseId: number; lang: Lang; showQty?: boolean }) {
   if (recipes.length === 0) return null;
   return (
     <section className="space-y-2">
@@ -115,9 +127,9 @@ function RecipeList({ title, recipes, houseId, showQty }: { title: string; recip
             >
               <span className="min-w-0 truncate">
                 {showQty && r.qty ? <span className="text-muted">{r.qty} × en </span> : null}
-                {r.name}
+                {pick(r.name, r.nameEs, lang)}
               </span>
-              <span className="shrink-0 text-xs text-muted">{r.profession}</span>
+              <span className="shrink-0 text-xs text-muted">{pick(r.profession, r.professionEs, lang)}</span>
             </Link>
           </li>
         ))}

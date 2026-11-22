@@ -4,6 +4,8 @@ import { HouseTabs } from "@/components/HouseTabs";
 import { ItemIcon } from "@/components/ItemIcon";
 import { Loading, NoHousesNotice, NoRecipesNotice, SetupNotice } from "@/components/notices";
 import { isConfigured } from "@/lib/env";
+import { pick } from "@/lib/lang";
+import { nameLang } from "@/lib/lang-server";
 import { formatMoney } from "@/lib/money";
 import { MAX_SKILL } from "@/lib/professions/leveling";
 import { buildPlan, colorAt } from "@/lib/professions/plan";
@@ -46,7 +48,8 @@ async function Planner({ params, searchParams }: PageProps<"/professions/[slug]/
   const to = Math.max(from + 1, clampSkill(sp.to, MAX_SKILL));
   const includeUnlisted = sp.planos === "todos";
   const sellOnAh = sp.vender === "subasta";
-  const profession = recipes[0].profession;
+  const lang = await nameLang();
+  const profession = pick(recipes[0].profession, recipes[0].profession_es, lang) ?? recipes[0].profession;
   const submitted = typeof sp.from === "string";
 
   const settings = await economySettings(house.faction);
@@ -58,7 +61,11 @@ async function Planner({ params, searchParams }: PageProps<"/professions/[slug]/
     }
   }
   const { markets, info } = await marketData(house.id, [...ids]);
-  const name = (id: number) => info.get(id)?.name ?? `Objeto #${id}`;
+  const name = (id: number) => pick(info.get(id)?.name, info.get(id)?.nameEs, lang) ?? `Objeto #${id}`;
+  const recipesName = (rows: { id: number; name_en: string; name_es: string | null }[], id?: number) => {
+    const r = rows.find((x) => x.id === id);
+    return r ? (pick(r.name_en, r.name_es, lang) ?? r.name_en) : "receta";
+  };
 
   const plan = submitted ? buildPlan({ recipes, craftable, markets, settings, from, to, includeUnlistedPlans: includeUnlisted, sellOnAh }) : null;
   const ratio = plan?.medianCost ? plan.route.cost / plan.medianCost : null;
@@ -191,7 +198,7 @@ async function Planner({ params, searchParams }: PageProps<"/professions/[slug]/
                         <span className="font-mono text-muted">
                           {st.from}–{st.to}
                         </span>{" "}
-                        <span className={color ? COLOR_CLASS[color] : ""}>{c.recipe.name_en}</span>
+                        <span className={color ? COLOR_CLASS[color] : ""}>{pick(c.recipe.name_en, c.recipe.name_es, lang)}</span>
                       </p>
                       <p className="text-xs text-muted">
                         ≈ {Math.ceil(st.crafts)} veces · nivel {c.recipe.skill_req} ({SOURCE[c.recipe.skill_source ?? "estimate"]})
@@ -230,9 +237,6 @@ async function Planner({ params, searchParams }: PageProps<"/professions/[slug]/
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
-function recipesName(rows: { id: number; name_en: string }[], id?: number) {
-  return rows.find((r) => r.id === id)?.name_en ?? "receta";
-}
 
 function Row({ label, value }: { label: string; value: string }) {
   return (

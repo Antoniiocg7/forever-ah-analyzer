@@ -16,7 +16,7 @@ function chunks<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-export type ProfessionSummary = { slug: string; name: string; recipes: number };
+export type ProfessionSummary = { slug: string; name: string; name_es: string | null; recipes: number };
 
 export async function professionSummaries(): Promise<ProfessionSummary[]> {
   return unwrap(await supabaseAdmin().from("profession_summary").select("*").order("name"));
@@ -26,7 +26,9 @@ export type RecipeRow = {
   id: number;
   profession: string;
   profession_slug: string;
+  profession_es: string | null;
   name_en: string;
+  name_es: string | null;
   category: string | null;
   tier: string | null;
   skill_req: number | null;
@@ -51,7 +53,7 @@ export async function recipesFor(slugs: string | string[]): Promise<RecipeRow[]>
       await supabaseAdmin()
         .from("recipes")
         .select(
-          "id, profession, profession_slug, name_en, category, tier, skill_req, skill_source, orange, yellow, green, grey, learned_from_item, yields_item, yields_qty, recipe_reagents(item_id, qty)",
+          "id, profession, profession_slug, profession_es, name_en, name_es, category, tier, skill_req, skill_source, orange, yellow, green, grey, learned_from_item, yields_item, yields_qty, recipe_reagents(item_id, qty)",
         )
         .in("profession_slug", list)
         .order("id")
@@ -71,11 +73,12 @@ export const toRecipeInput = (r: RecipeRow): RecipeInput => ({
   reagents: r.recipe_reagents.map((g) => ({ itemId: g.item_id, qty: g.qty })),
 });
 
-export type ItemInfo = { name: string | null; quality: string | null; icon: string | null };
+export type ItemInfo = { name: string | null; nameEs: string | null; quality: string | null; icon: string | null };
 
 type ItemRow = {
   id: number;
   name_en: string | null;
+  name_es: string | null;
   quality: string | null;
   icon_url: string | null;
   vendor_sell: number | null;
@@ -95,7 +98,7 @@ export async function marketData(houseId: number, itemIds: number[]) {
   const parts = await Promise.all(
     chunks(itemIds, 300).map(async (part) => {
       const [items, prices, stats] = await Promise.all([
-        db.from("items").select("id, name_en, quality, icon_url, vendor_sell, vendor_buy, vendor_sold").in("id", part),
+        db.from("items").select("id, name_en, name_es, quality, icon_url, vendor_sell, vendor_buy, vendor_sold").in("id", part),
         db.from("item_prices_latest").select("item_id, min_buyout, p15_market, qty, num_auctions, fetched_at").eq("house_id", houseId).in("item_id", part),
         db.from("item_market_7d").select("item_id, market_7d, sold_per_day").eq("house_id", houseId).in("item_id", part),
       ]);
@@ -119,7 +122,7 @@ export async function marketData(houseId: number, itemIds: number[]) {
     const item = itemMap.get(id);
     const price = priceMap.get(id);
     const stat = statMap.get(id);
-    info.set(id, { name: item?.name_en ?? null, quality: item?.quality ?? null, icon: item?.icon_url || null });
+    info.set(id, { name: item?.name_en ?? null, nameEs: item?.name_es ?? null, quality: item?.quality ?? null, icon: item?.icon_url || null });
     markets.set(id, {
       min: price?.min_buyout ?? null,
       market: price?.p15_market ?? null,
@@ -167,17 +170,25 @@ export async function economySettings(faction: string): Promise<EconomySettings>
   };
 }
 
-export type RecipeLink = { id: number; name: string; profession: string; slug: string; qty?: number };
+export type RecipeLink = { id: number; name: string; nameEs: string | null; profession: string; professionEs: string | null; slug: string; qty?: number };
 
 /** Recetas que fabrican un objeto y recetas que lo usan como material. */
 export async function recipesForItem(itemId: number): Promise<{ makes: RecipeLink[]; uses: RecipeLink[] }> {
   const db = supabaseAdmin();
-  type R = { id: number; name_en: string; profession: string; profession_slug: string };
+  type R = { id: number; name_en: string; name_es: string | null; profession: string; profession_es: string | null; profession_slug: string };
   const [makes, uses] = await Promise.all([
-    db.from("recipes").select("id, name_en, profession, profession_slug").eq("yields_item", itemId).order("name_en"),
-    db.from("recipe_reagents").select("qty, recipes(id, name_en, profession, profession_slug)").eq("item_id", itemId).limit(200),
+    db.from("recipes").select("id, name_en, name_es, profession, profession_es, profession_slug").eq("yields_item", itemId).order("name_en"),
+    db.from("recipe_reagents").select("qty, recipes(id, name_en, name_es, profession, profession_es, profession_slug)").eq("item_id", itemId).limit(200),
   ]);
-  const toLink = (r: R, qty?: number): RecipeLink => ({ id: r.id, name: r.name_en, profession: r.profession, slug: r.profession_slug, qty });
+  const toLink = (r: R, qty?: number): RecipeLink => ({
+    id: r.id,
+    name: r.name_en,
+    nameEs: r.name_es,
+    profession: r.profession,
+    professionEs: r.profession_es,
+    slug: r.profession_slug,
+    qty,
+  });
   return {
     makes: unwrap<R[]>(makes).map((r) => toLink(r)),
     uses: unwrap<{ qty: number; recipes: R | null }[]>(uses as never)

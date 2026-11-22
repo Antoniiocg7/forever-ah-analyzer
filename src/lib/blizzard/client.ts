@@ -11,6 +11,7 @@ import {
   skillTierSchema,
   rawAuctionSchema,
   rulesetIndexSchema,
+  spanishName,
   type TimeLeft,
 } from "./schemas";
 
@@ -75,12 +76,13 @@ export class BlizzardClient {
   /** GET con reintentos y backoff en 429/5xx. `pathOrUrl` puede ser un href completo de la API. */
   async get(
     pathOrUrl: string,
-    opts: { namespace: Namespace; ifModifiedSince?: string | null },
+    opts: { namespace: Namespace; ifModifiedSince?: string | null; allLocales?: boolean },
   ): Promise<GetResult> {
     const url = new URL(pathOrUrl, this.host);
     if (url.host !== new URL(this.host).host) throw new Error(`Host inesperado: ${url.host}`);
     url.searchParams.set("namespace", `${NAMESPACE_PREFIX[opts.namespace]}-${this.region}`);
-    url.searchParams.set("locale", "en_US");
+    // Sin `locale` la API devuelve todos los idiomas: así se guardan inglés y español de una vez.
+    if (!opts.allLocales) url.searchParams.set("locale", "en_US");
 
     for (let attempt = 0; ; attempt++) {
       const headers: Record<string, string> = { Authorization: `Bearer ${await this.getToken()}` };
@@ -170,10 +172,10 @@ export class BlizzardClient {
 
   /** Datos estáticos de un objeto. null si da 404 (pasa con ~43% de los IDs en static-forever). */
   async item(itemId: number, namespace: "static" | "classic" = "static") {
-    const res = await this.get(`/data/wow/item/${itemId}`, { namespace });
+    const res = await this.get(`/data/wow/item/${itemId}`, { namespace, allLocales: true });
     if (res.status !== 200) return null;
     const parsed = itemSchema.safeParse(res.json);
-    return parsed.success ? parsed.data : null;
+    return parsed.success ? { ...parsed.data, name_es: spanishName((res.json as { name?: unknown }).name) } : null;
   }
 
   /** URL del icono de un objeto (render.worldofwarcraft.com). null si no hay. */
@@ -185,11 +187,12 @@ export class BlizzardClient {
   }
 
   /** GET a static-forever validado con un esquema. null si da 404 o el formato no encaja. */
-  private async staticGet<S extends z.ZodType>(path: string, schema: S): Promise<z.infer<S> | null> {
-    const res = await this.get(path, { namespace: "static" });
+  /** GET a static-forever con todos los idiomas: devuelve lo validado (en inglés) más el nombre en español. */
+  private async staticGet<S extends z.ZodType>(path: string, schema: S): Promise<(z.infer<S> & { name_es: string | null }) | null> {
+    const res = await this.get(path, { namespace: "static", allLocales: true });
     if (res.status !== 200) return null;
     const parsed = schema.safeParse(res.json);
-    return parsed.success ? parsed.data : null;
+    return parsed.success ? { ...(parsed.data as object), name_es: spanishName((res.json as { name?: unknown }).name) } as z.infer<S> & { name_es: string | null } : null;
   }
 
   async professions() {

@@ -170,6 +170,7 @@ type ItemData = NonNullable<Awaited<ReturnType<BlizzardClient["item"]>>>;
 const itemRow = (id: number, item: ItemData, source: "blizzard" | "classic") => ({
   id,
   name_en: item.name ?? null,
+  name_es: item.name_es ?? null,
   quality: item.quality?.type ?? null,
   vendor_sell: item.sell_price ?? null,
   vendor_buy: item.purchase_price ?? null,

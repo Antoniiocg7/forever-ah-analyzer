@@ -39,6 +39,7 @@ export type LatestPriceRow = {
   /** ESTIMACIÓN de ventas por día (media de 7 días). */
   sold_per_day: number | null;
   name_en: string | null;
+  name_es: string | null;
   quality: string | null;
   icon_url: string | null;
   vendor_sell: number | null;

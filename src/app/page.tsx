@@ -6,6 +6,8 @@ import { HouseTabs } from "@/components/HouseTabs";
 import { ItemIcon } from "@/components/ItemIcon";
 import { Loading, NoHousesNotice, SetupNotice } from "@/components/notices";
 import { isConfigured } from "@/lib/env";
+import { pick, type Lang } from "@/lib/lang";
+import { nameLang } from "@/lib/lang-server";
 import { formatMoney } from "@/lib/money";
 import { hoursSinceLastIngest, PRICE_SORTS, searchPrices, trackedHouses, type PriceSort } from "@/lib/queries";
 import type { LatestPriceRow } from "@/lib/supabase";
@@ -31,7 +33,7 @@ async function Explorer({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
   const houses = await trackedHouses();
   if (houses.length === 0) return <NoHousesNotice />;
   const house = houses.find((h) => String(h.id) === sp.house) ?? houses[0];
-  const [rows, staleHours] = await Promise.all([searchPrices(house.id, q, sort), hoursSinceLastIngest()]);
+  const [rows, staleHours, lang] = await Promise.all([searchPrices(house.id, q, sort), hoursSinceLastIngest(), nameLang()]);
   const updated = rows[0]?.fetched_at;
 
   const href = (over: { house?: number; sort?: PriceSort; q?: string }) => {
@@ -100,7 +102,7 @@ async function Explorer({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
           <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
             {rows.map((r) => (
               <li key={r.item_id}>
-                <PriceRow row={r} houseId={house.id} />
+                <PriceRow row={r} houseId={house.id} lang={lang} />
               </li>
             ))}
           </ul>
@@ -110,7 +112,7 @@ async function Explorer({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
   );
 }
 
-function PriceRow({ row: r, houseId }: { row: LatestPriceRow; houseId: number }) {
+function PriceRow({ row: r, houseId, lang }: { row: LatestPriceRow; houseId: number; lang: Lang }) {
   // Variación del mínimo actual frente a la mediana de 7 días (solo si es apreciable).
   const pct = r.discount === null ? null : Math.round(-r.discount * 100);
   const showPct = pct !== null && Math.abs(pct) >= 5;
@@ -120,7 +122,7 @@ function PriceRow({ row: r, houseId }: { row: LatestPriceRow; houseId: number })
       <div className="flex min-w-0 items-center gap-3">
         <ItemIcon src={r.icon_url} quality={r.quality} />
         <div className="min-w-0">
-          <p className={`truncate font-medium q-${r.quality ?? "COMMON"}`}>{r.name_en ?? `Objeto #${r.item_id}`}</p>
+          <p className={`truncate font-medium q-${r.quality ?? "COMMON"}`}>{pick(r.name_en, r.name_es, lang) ?? `Objeto #${r.item_id}`}</p>
           <p className="truncate text-xs text-muted">
             {r.qty.toLocaleString("es-ES")} en venta
             {r.sold_per_day !== null && ` · ≈${r.sold_per_day.toLocaleString("es-ES")} vendidos/día`}

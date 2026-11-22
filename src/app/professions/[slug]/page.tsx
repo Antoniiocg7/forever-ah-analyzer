@@ -5,6 +5,8 @@ import { ItemIcon } from "@/components/ItemIcon";
 import { Loading, NoHousesNotice, NoRecipesNotice, SetupNotice } from "@/components/notices";
 import { adminTokenRequired } from "@/lib/admin";
 import { isConfigured } from "@/lib/env";
+import { pick, type Lang } from "@/lib/lang";
+import { nameLang } from "@/lib/lang-server";
 import { formatMoney } from "@/lib/money";
 import { craftCosts, craftEconomics, type CraftResult, type Liquidity } from "@/lib/professions/craft";
 import { colorsFor, type ColorOffsets } from "@/lib/professions/leveling";
@@ -67,7 +69,8 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
   const q = typeof sp.q === "string" ? sp.q.trim() : "";
   const reliable = sp.fiables === "1";
 
-  const settings = await economySettings(house.faction);
+  const [settings, lang] = await Promise.all([economySettings(house.faction), nameLang()]);
+  const recipeTitle = (r: RecipeRow) => pick(r.name_en, r.name_es, lang) ?? r.name_en;
   // Para abaratar materiales se pueden fabricar con tus profesiones (p. ej. fundir barras).
   const craftable = await recipesFor([...new Set([...settings.myProfessions, slug])]);
   const craftInputs = craftable.map(toRecipeInput);
@@ -79,7 +82,7 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
   }
   const { markets, info, updatedAt } = await marketData(house.id, [...itemIds]);
   const crafted = craftCosts(craftInputs, markets);
-  const recipeName = new Map(craftable.map((r) => [r.id, r.name_en]));
+  const recipeName = new Map(craftable.map((r) => [r.id, recipeTitle(r)]));
 
   const all = recipes.map((recipe) => ({
     recipe,
@@ -87,11 +90,11 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
   }));
   const rows = all.filter(
     ({ recipe, calc }) =>
-      (!q || recipe.name_en.toLowerCase().includes(q.toLowerCase())) &&
+      (!q || [recipe.name_en, recipe.name_es].some((n) => n?.toLowerCase().includes(q.toLowerCase()))) &&
       (!reliable || (calc.profit !== null && calc.profit > 0 && (calc.liquidity === "ok" || calc.liquidity === "unknown"))),
   );
 
-  if (sort === "name") rows.sort((a, b) => a.recipe.name_en.localeCompare(b.recipe.name_en));
+  if (sort === "name") rows.sort((a, b) => recipeTitle(a.recipe).localeCompare(recipeTitle(b.recipe)));
   else if (sort === "cost") rows.sort(byNumber((c) => c.cost, 1));
   else if (sort === "margin") rows.sort(byNumber((c) => c.margin, -1));
   else rows.sort(byNumber((c) => c.profit, -1));
@@ -109,7 +112,7 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-        <h1 className="text-xl font-semibold">{recipes[0].profession}</h1>
+        <h1 className="text-xl font-semibold">{pick(recipes[0].profession, recipes[0].profession_es, lang)}</h1>
         <p className="text-xs text-muted">
           {recipes.length.toLocaleString("es-ES")} recetas · {profitable} con beneficio ahora
           {updatedAt && ` · precios de ${new Date(updatedAt).toLocaleString("es-ES", { timeZone: "Europe/Warsaw", dateStyle: "short", timeStyle: "short" })}`}
@@ -161,6 +164,7 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
                 houseId={house.id}
                 info={info}
                 recipeName={recipeName}
+                lang={lang}
                 offsets={settings.colorOffsets}
                 back={href({})}
                 needToken={adminTokenRequired()}
@@ -198,6 +202,7 @@ function RecipeItem({
   houseId,
   info,
   recipeName,
+  lang,
   offsets,
   back,
   needToken,
@@ -207,6 +212,7 @@ function RecipeItem({
   houseId: number;
   info: ReadonlyMap<number, ItemInfo>;
   recipeName: ReadonlyMap<number, string>;
+  lang: Lang;
   offsets: ColorOffsets;
   back: string;
   needToken: boolean;
@@ -214,7 +220,7 @@ function RecipeItem({
   const profitClass = calc.profit === null ? "text-muted" : calc.profit > 0 ? "text-good" : "text-bad";
   const qty = Number(recipe.yields_qty);
   const product = recipe.yields_item === null ? null : info.get(recipe.yields_item);
-  const itemName = (id: number) => info.get(id)?.name ?? `Objeto #${id}`;
+  const itemName = (id: number) => pick(info.get(id)?.name, info.get(id)?.nameEs, lang) ?? `Objeto #${id}`;
   const badge = LIQUIDITY[calc.liquidity];
   const approx = recipe.skill_source === "estimate" || recipe.skill_source === "classic";
   const meta = [recipe.category, recipe.skill_req ? `nivel ${recipe.skill_req}${approx ? " aprox." : ""}` : null].filter(Boolean).join(" · ");
@@ -230,7 +236,7 @@ function RecipeItem({
           <ItemIcon src={product?.icon} quality={product?.quality} />
           <div className="min-w-0">
             <p className={`truncate font-medium q-${product?.quality ?? "COMMON"}`}>
-              {recipe.name_en}
+              {pick(recipe.name_en, recipe.name_es, lang)}
               {qty !== 1 && <span className="text-muted"> ×{qty}</span>}
             </p>
             <p className="flex items-center gap-2 truncate text-xs text-muted">

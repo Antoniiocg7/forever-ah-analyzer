@@ -28,6 +28,14 @@ export const auctionsResponseSchema = z.object({
   auctions: z.array(z.unknown()).optional().default([]),
 });
 
+/** Nombre en español de un campo con todas las traducciones (se pide sin `locale`). */
+export function spanishName(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const v = r.es_ES ?? r.es_MX;
+  return typeof v === "string" && v ? v : null;
+}
+
 const localized = z.union([
   z.string(),
   z.record(z.string(), z.string()).transform((r) => r.en_US ?? r.en_GB ?? Object.values(r)[0] ?? ""),

@@ -3,6 +3,8 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { Loading, NoRecipesNotice, SetupNotice } from "@/components/notices";
 import { isConfigured } from "@/lib/env";
+import { pick } from "@/lib/lang";
+import { nameLang } from "@/lib/lang-server";
 import { economySettings, professionSummaries } from "@/lib/professions/queries";
 import { saveMyProfessions } from "./actions";
 
@@ -23,7 +25,8 @@ export default function Page({ searchParams }: PageProps<"/professions">) {
 async function Professions({ searchParams }: Pick<PageProps<"/professions">, "searchParams">) {
   await connection();
   if (!isConfigured()) return <SetupNotice />;
-  const [sp, all, settings] = await Promise.all([searchParams, professionSummaries(), economySettings("alliance")]);
+  const [sp, summaries, settings, lang] = await Promise.all([searchParams, professionSummaries(), economySettings("alliance"), nameLang()]);
+  const all = summaries.map((p) => ({ ...p, name: pick(p.name, p.name_es, lang) ?? p.name }));
   if (all.length === 0) return <NoRecipesNotice />;
   const mine = settings.myProfessions;
 
