@@ -4,7 +4,7 @@ import { chunks, must, storeItems } from "../ingest";
 
 export const slugify = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-type RecipeRef = { id: number; name: string; category: string | null; tier: string | null };
+type RecipeRef = { id: number; name: string; category: string | null; categoryEs: string | null; tier: string | null };
 
 /**
  * Descarga de static-forever todas las recetas de todas las profesiones y las guarda.
@@ -28,7 +28,7 @@ export async function syncRecipes(db: SupabaseClient, blizzard: BlizzardClient, 
       const t = await blizzard.skillTier(prof.id, tier.id);
       for (const cat of t?.categories ?? []) {
         for (const r of cat.recipes) {
-          refs.set(r.id, { id: r.id, name: r.name ?? `Recipe ${r.id}`, category: cat.name ?? null, tier: t?.name ?? tier.name ?? null });
+          refs.set(r.id, { id: r.id, name: r.name ?? `Recipe ${r.id}`, category: cat.name.en, categoryEs: cat.name.es, tier: t?.name ?? tier.name ?? null });
         }
       }
     }
@@ -59,6 +59,7 @@ export async function syncRecipes(db: SupabaseClient, blizzard: BlizzardClient, 
           name_en: d.name ?? ref.name,
           name_es: d.name_es ?? null,
           category: ref.category,
+          category_es: ref.categoryEs,
           tier: ref.tier,
           yields_item: yieldsItem,
           yields_qty: d.crafted_quantity ?? 1,

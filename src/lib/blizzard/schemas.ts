@@ -77,10 +77,22 @@ const named = z.object({ id: z.number(), name: localized.optional() });
 
 export const professionIndexSchema = z.object({ professions: z.array(named).optional().default([]) });
 export const professionSchema = z.object({ id: z.number(), name: localized.optional(), skill_tiers: z.array(named).optional().default([]) });
+/** Nombre con todas las traducciones → { en, es }. */
+const bilingual = z.unknown().transform((raw) => ({
+  en: typeof raw === "string" ? raw : (localized.safeParse(raw).data ?? null),
+  es: spanishName(raw),
+}));
+
+export const itemClassIndexSchema = z.object({ item_classes: z.array(z.object({ id: z.number() })).optional().default([]) });
+export const itemClassSchema = z.object({
+  name: bilingual,
+  item_subclasses: z.array(z.object({ id: z.number(), name: bilingual })).optional().default([]),
+});
+
 export const skillTierSchema = z.object({
   name: localized.optional(),
   categories: z
-    .array(z.object({ name: localized.optional(), recipes: z.array(named).optional().default([]) }))
+    .array(z.object({ name: bilingual, recipes: z.array(named).optional().default([]) }))
     .optional()
     .default([]),
 });

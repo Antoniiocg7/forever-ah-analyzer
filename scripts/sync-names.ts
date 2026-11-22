@@ -1,4 +1,4 @@
-// Rellena los nombres en español de los objetos que aún no los tienen (una vez; luego la ingesta ya los guarda).
+// Rellena los nombres en español: tipos de objeto y objetos que aún no los tienen (la ingesta ya guarda los nuevos).
 // Uso: pnpm sync-names
 import { chunks, fetchItems, must } from "../src/lib/ingest";
 import { setup } from "./_setup";
@@ -11,6 +11,9 @@ async function main() {
     ids.push(...(page ?? []).map((r) => r.id as number));
     if (!page || page.length < 1000) break;
   }
+  const classes = await blizzard.itemClassNames();
+  if (classes.length) await must(db.from("item_class_names").upsert(classes));
+  console.log(`${classes.length} tipos de objeto traducidos.`);
   console.log(`${ids.length} objetos sin nombre en español…`);
   let done = 0;
   for (const part of chunks(ids, 500)) {

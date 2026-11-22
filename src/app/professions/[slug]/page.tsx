@@ -223,7 +223,7 @@ function RecipeItem({
   const itemName = (id: number) => pick(info.get(id)?.name, info.get(id)?.nameEs, lang) ?? `Objeto #${id}`;
   const badge = LIQUIDITY[calc.liquidity];
   const approx = recipe.skill_source === "estimate" || recipe.skill_source === "classic";
-  const meta = [recipe.category, recipe.skill_req ? `nivel ${recipe.skill_req}${approx ? " aprox." : ""}` : null].filter(Boolean).join(" · ");
+  const meta = [pick(recipe.category, recipe.category_es, lang), recipe.skill_req ? `nivel ${recipe.skill_req}${approx ? " aprox." : ""}` : null].filter(Boolean).join(" · ");
   const colors = recipe.skill_req
     ? colorsFor({ skillReq: recipe.skill_req, orange: recipe.orange, yellow: recipe.yellow, green: recipe.green, grey: recipe.grey }, offsets)
     : null;

@@ -10,7 +10,7 @@ import { pick, wowheadItemUrl, type Lang } from "@/lib/lang";
 import { nameLang } from "@/lib/lang-server";
 import { formatMoney } from "@/lib/money";
 import { recipesForItem, type RecipeLink } from "@/lib/professions/queries";
-import { dailySeries, hourlySeries, itemById, latestPrice, trackedHouses } from "@/lib/queries";
+import { dailySeries, hourlySeries, itemById, itemClassNames, latestPrice, trackedHouses } from "@/lib/queries";
 
 export default function Page(props: PageProps<"/item/[id]">) {
   return (
@@ -35,14 +35,16 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
   if (houses.length === 0) return <NoHousesNotice />;
   const house = houses.find((h) => String(h.id) === sp.house) ?? houses[0];
 
-  const [item, latest, hourly, daily, recipes, lang] = await Promise.all([
+  const [item, latest, hourly, daily, recipes, lang, classNames] = await Promise.all([
     itemById(itemId),
     latestPrice(house.id, itemId),
     hourlySeries(house.id, itemId),
     dailySeries(house.id, itemId),
     recipesForItem(itemId),
     nameLang(),
+    itemClassNames(),
   ]);
+  const typeName = (en: string | null | undefined) => (en ? (lang === "es" ? (classNames.get(en) ?? en) : en) : null);
 
   // Ventas por día: media de 7 días ya calculada; si no hay, la de los días disponibles.
   const soldDays = daily.filter((d) => d.sold !== null);
@@ -72,7 +74,7 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
         </h1>
         <p className="text-xs text-muted">
           ID {itemId}
-          {item?.class && ` · ${item.class}${item.subclass ? ` / ${item.subclass}` : ""}`}
+          {item?.class && ` · ${typeName(item.class)}${item.subclass ? ` / ${typeName(item.subclass)}` : ""}`}
           {lang === "es" && item?.name_es && item.name_en && ` · ${item.name_en}`}
         </p>
         <a

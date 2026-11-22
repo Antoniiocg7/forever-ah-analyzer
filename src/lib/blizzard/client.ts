@@ -3,6 +3,8 @@ import {
   auctionsResponseSchema,
   extractHouses,
   hrefSchema,
+  itemClassIndexSchema,
+  itemClassSchema,
   itemSchema,
   mediaSchema,
   professionIndexSchema,
@@ -205,6 +207,19 @@ export class BlizzardClient {
 
   skillTier(professionId: number, tierId: number) {
     return this.staticGet(`/data/wow/profession/${professionId}/skill-tier/${tierId}`, skillTierSchema);
+  }
+
+  /** Pares inglés → español de todas las clases y subclases de objeto. */
+  async itemClassNames(): Promise<{ en: string; es: string }[]> {
+    const index = await this.staticGet("/data/wow/item-class/index", itemClassIndexSchema);
+    const out = new Map<string, string>();
+    for (const c of index?.item_classes ?? []) {
+      const cls = await this.staticGet(`/data/wow/item-class/${c.id}`, itemClassSchema);
+      for (const n of [cls?.name, ...(cls?.item_subclasses ?? []).map((s) => s.name)]) {
+        if (n?.en && n.es && !out.has(n.en)) out.set(n.en, n.es);
+      }
+    }
+    return [...out].map(([en, es]) => ({ en, es }));
   }
 
   recipe(id: number) {

@@ -30,6 +30,7 @@ export type RecipeRow = {
   name_en: string;
   name_es: string | null;
   category: string | null;
+  category_es: string | null;
   tier: string | null;
   skill_req: number | null;
   yields_item: number | null;
@@ -53,7 +54,7 @@ export async function recipesFor(slugs: string | string[]): Promise<RecipeRow[]>
       await supabaseAdmin()
         .from("recipes")
         .select(
-          "id, profession, profession_slug, profession_es, name_en, name_es, category, tier, skill_req, skill_source, orange, yellow, green, grey, learned_from_item, yields_item, yields_qty, recipe_reagents(item_id, qty)",
+          "id, profession, profession_slug, profession_es, name_en, name_es, category, category_es, tier, skill_req, skill_source, orange, yellow, green, grey, learned_from_item, yields_item, yields_qty, recipe_reagents(item_id, qty)",
         )
         .in("profession_slug", list)
         .order("id")

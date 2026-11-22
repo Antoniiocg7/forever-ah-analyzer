@@ -83,6 +83,12 @@ export async function itemById(itemId: number): Promise<ItemRow | null> {
   );
 }
 
+/** Traducción inglés → español de los tipos de objeto (clase y subclase). */
+export async function itemClassNames(): Promise<Map<string, string>> {
+  const rows = unwrap<{ en: string; es: string }[]>(await supabaseAdmin().from("item_class_names").select("en, es"));
+  return new Map(rows.map((r) => [r.en, r.es]));
+}
+
 export type PricePoint = { t: number; min: number | null; market: number | null; qty: number; sold: number | null };
 
 /** Serie horaria de los últimos 7 días (hora de los datos, no de la descarga). */
