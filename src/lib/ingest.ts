@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { BlizzardClient } from "./blizzard/client";
 import { factionFromName } from "./blizzard/schemas";
 import { aggregateListings } from "./pricing/aggregate";
+import { computeDepth } from "./pricing/deals";
 import { decodeState, encodeState, estimateSales, toCompact } from "./pricing/sales";
 import { REFERENCE_ITEMS } from "./reference-items";
 
@@ -36,6 +37,23 @@ export type IngestResult = {
   gapMinutes?: number | null;
 };
 
+/** Mediana de 7 días y precio de vendedor de lo que hay en venta, para calcular la profundidad de los chollos. */
+async function depthReferences(db: SupabaseClient, houseId: number): Promise<[Map<number, number>, Map<number, number>]> {
+  const market = new Map<number, number>();
+  const vendor = new Map<number, number>();
+  for (let from = 0; ; from += CHUNK) {
+    const page = await must(
+      db.from("latest_item_prices").select("item_id, market_7d, vendor_sell").eq("house_id", houseId).order("item_id").range(from, from + CHUNK - 1),
+    );
+    for (const r of page ?? []) {
+      if (r.market_7d) market.set(r.item_id as number, Number(r.market_7d));
+      if (r.vendor_sell) vendor.set(r.item_id as number, Number(r.vendor_sell));
+    }
+    if (!page || page.length < CHUNK) break;
+  }
+  return [market, vendor];
+}
+
 /** Hora de los datos según Last-Modified; si falta, la de descarga. */
 function dataTime(lastModified: string | null, fallback: Date): Date {
   const t = lastModified ? Date.parse(lastModified) : NaN;
@@ -62,6 +80,7 @@ export async function ingestHouse(
     const dataAt = dataTime(lastModified, fetchedAt);
 
     const aggregates = aggregateListings(listings);
+    const depth = computeDepth(listings, ...(await depthReferences(db, houseId)));
 
     // Ventas: diferencia con el estado anterior. Si el estado está corrupto, se sigue sin estimar.
     let sold: Map<number, number> | null = null;
@@ -120,6 +139,10 @@ export async function ingestHouse(
       p15_market: a.p15Market,
       qty: a.qty,
       num_auctions: a.numAuctions,
+      deal_units: depth.get(a.itemId)?.dealUnits ?? 0,
+      deal_cost: depth.get(a.itemId)?.dealCost ?? 0,
+      vendor_units: depth.get(a.itemId)?.vendorUnits ?? 0,
+      vendor_profit: depth.get(a.itemId)?.vendorProfit ?? 0,
     }));
     for (const part of chunks(latest, CHUNK)) await must(db.from("item_prices_latest").upsert(part));
     await must(db.from("item_prices_latest").delete().eq("house_id", houseId).neq("snapshot_id", snapshot.id));

@@ -46,4 +46,14 @@ export type LatestPriceRow = {
   vendor_sold: boolean | null;
   /** 1 − mínimo / mediana de 7 días: 0,2 = un 20% más barato de lo normal. */
   discount: number | null;
+  /** Unidades a ≤ 85% de la mediana y lo que cuestan (profundidad del chollo). */
+  deal_units: number;
+  deal_cost: number;
+  /** Unidades por debajo de lo que paga el vendedor y la ganancia segura. */
+  vendor_units: number;
+  vendor_profit: number;
+  /** Variación de la mediana diaria en la semana (0,1 = +10%). null con menos de 3 días. */
+  trend: number | null;
+  class: string | null;
+  subclass: string | null;
 };

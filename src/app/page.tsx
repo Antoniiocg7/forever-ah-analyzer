@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { GameContextBanner } from "@/components/GameContextBanner";
 import { HouseTabs } from "@/components/HouseTabs";
 import { ItemIcon } from "@/components/ItemIcon";
 import { Loading, NoHousesNotice, SetupNotice } from "@/components/notices";
@@ -52,6 +53,10 @@ async function Explorer({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
         <input className="input" type="search" name="q" defaultValue={q} placeholder="Busca un objeto o su ID" enterKeyHint="search" aria-label="Buscar objeto" />
         <button className="btn shrink-0">Buscar</button>
       </form>
+
+      <Suspense>
+        <GameContextBanner compact />
+      </Suspense>
 
       <div className="-mx-4 flex gap-2 overflow-x-auto px-4 text-sm">
         {QUICK.map((term) => (

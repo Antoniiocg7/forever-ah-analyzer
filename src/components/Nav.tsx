@@ -11,6 +11,12 @@ const LINKS = [
     icon: "M3 3v18h18M7 15l4-4 3 3 5-6",
   },
   {
+    href: "/deals",
+    label: "Chollos",
+    match: (p: string) => p.startsWith("/deals"),
+    icon: "M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01",
+  },
+  {
     href: "/professions",
     label: "Profesiones",
     match: (p: string) => p.startsWith("/professions"),
@@ -61,7 +67,7 @@ function TopNavView({ path }: { path: string }) {
 function BottomNavView({ path }: { path: string }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
-      <div className="mx-auto grid max-w-md grid-cols-3">
+      <div className="mx-auto grid max-w-md grid-cols-4">
         {LINKS.map((l) => {
           const active = l.match(path);
           return (
