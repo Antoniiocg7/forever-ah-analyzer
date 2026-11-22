@@ -22,6 +22,12 @@ La especificación completa está en [CLAUDE.md](CLAUDE.md). Hecho hasta ahora: 
    pnpm ingest
    ```
 
+## Web publicada
+
+https://forever-ah-analyzer.vercel.app (Vercel, plan gratis). Cada push a `main` se publica solo.
+Variables en Vercel (Production): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` y `ADMIN_TOKEN`. Publicada, la web pide
+`ADMIN_TOKEN` para marcar casas o corregir niveles de receta; en local (`pnpm dev`) no.
+
 ## Ingesta horaria
 
 `.github/workflows/ingest.yml` ejecuta `pnpm ingest`. Necesita estos secretos en el repo de GitHub:
@@ -73,6 +79,7 @@ El resumen diario, el borrado de datos horarios de más de 7 días y de diarios 
 - **Ventas estimadas**: subastas que desaparecen y no pudieron caducar según su `time_left` y el tiempo entre snapshots (con 8 h de hueco solo cuentan las `VERY_LONG`), más las unidades que bajan en los commodities. Se escalan a ventas/día. Las cancelaciones cuentan como ventas: la API no las distingue.
 - **Coste de una receta**: cada material al más barato entre subasta, vendedor y fabricarlo con tus profesiones (`settings.my_professions`), en cadena (mineral → barra → objeto).
 - **Precio de venta**: el menor entre el mínimo actual y la mediana de 7 días, menos la comisión.
+- **Chollos** (`/deals`): *Revender* (descuento frente a la mediana de 7 días, solo con ≥ `deals.min_sold_per_day` ventas/día y ≥ `deals.min_market` de mercado; beneficio = mediana × (1 − comisión) − precio − depósito 24 h × prob. de no venderse; profundidad = unidades a ≤ 85% de la mediana). *Vender al vendedor* (por debajo de lo que paga). *Invertir*: consumibles y materiales de raid según los días que faltan en `settings.calendar` y su tendencia semanal. Es una heurística, no una predicción.
 - **Planificador de subida** (`/professions/<profesión>/plan`): programación dinámica por tramos sobre las recetas con nivel y precio. Coste por punto = (materiales − lo que recuperas) / probabilidad de subir (naranja 100%, amarillo 75%, verde 25%), más los planos una vez. Por defecto solo cuenta lo que paga el vendedor; vender en la subasta es opcional (optimista). Compara con el coste usando las medianas de 7 días: ≤85% es buen momento.
 
 ## Medido con datos reales

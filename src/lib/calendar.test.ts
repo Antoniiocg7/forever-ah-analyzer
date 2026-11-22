@@ -31,5 +31,6 @@ describe("categorize", () => {
     expect(categorize("Iron Ore")).toBe("leveling-material");
     expect(categorize("Thorium Shells")).toBeNull();
     expect(categorize(null)).toBeNull();
+    expect(categorize("Recipe: Greater Arcane Protection Potion")).toBeNull();
   });
 });

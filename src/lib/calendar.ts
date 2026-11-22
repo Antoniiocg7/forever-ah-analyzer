@@ -44,9 +44,9 @@ export function gameContext(events: GameEvent[], now = Date.now()): GameContext 
 export type Category = "raid-consumable" | "raid-material" | "leveling-material";
 
 export const CATEGORY_LABEL: Record<Category, string> = {
-  "raid-consumable": "Consumible de raid",
-  "raid-material": "Material de raid",
-  "leveling-material": "Material de subida",
+  "raid-consumable": "Consumibles de raid",
+  "raid-material": "Materiales de raid",
+  "leveling-material": "Materiales de subida",
 };
 
 const RAID_CONSUMABLE = [
@@ -85,7 +85,8 @@ const LEVELING_MATERIAL = [
 ];
 
 export function categorize(name: string | null): Category | null {
-  if (!name) return null;
+  // Las recetas ("Recipe: …", "Plans: …") no son el consumible en sí.
+  if (!name || /^(Recipe|Plans|Pattern|Formula|Schematic|Manual|Design|Technique):/.test(name)) return null;
   if (RAID_CONSUMABLE.some((r) => r.test(name))) return "raid-consumable";
   if (RAID_MATERIAL.some((r) => r.test(name))) return "raid-material";
   if (LEVELING_MATERIAL.some((r) => r.test(name))) return "leveling-material";

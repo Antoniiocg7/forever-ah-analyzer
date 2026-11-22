@@ -152,7 +152,9 @@ type Advice = { label: string; className: string; rank: number };
 function adviceFor(r: LatestPriceRow, raidSoon: boolean): Advice {
   const trend = r.trend ?? 0;
   const discount = r.discount ?? 0;
-  if (trend >= 0.15) return { label: "Ya ha subido", className: "text-bad", rank: 3 };
+  if (trend >= 0.15) return { label: "Ya ha subido", className: "text-bad", rank: 4 };
+  // Si se está desplomando, mejor esperar a que se estabilice que comprar a mitad de caída.
+  if (trend <= -0.25) return { label: "Bajando: espera", className: "text-gold", rank: 3 };
   if (raidSoon && discount >= 0 && trend <= 0.1) return { label: "Comprar ahora", className: "text-good", rank: 1 };
   return { label: "Vigilar", className: "text-muted", rank: 2 };
 }
@@ -177,7 +179,7 @@ async function InvestList({ houseId }: { houseId: number }) {
     <>
       <p className="text-sm text-muted">
         {raidSoon
-          ? `Objetos que suelen subir antes de abrir raids (faltan ${ctx.next!.daysUntil} días). “Comprar ahora” = por debajo de su mediana y sin haber subido aún esta semana.`
+          ? `Objetos que suelen subir antes de abrir raids (faltan ${ctx.next!.daysUntil} días). “Comprar ahora” = por debajo de su mediana y estable esta semana; “Bajando” = ha caído más de un 25% en la semana, mejor esperar.`
           : "No hay una apertura de raids cerca en el calendario: esta lista solo enseña cómo están los objetos de raid."}
       </p>
       {(["raid-consumable", "raid-material"] as const).map((cat) => {
@@ -185,7 +187,7 @@ async function InvestList({ houseId }: { houseId: number }) {
         if (list.length === 0) return null;
         return (
           <section key={cat} className="space-y-2">
-            <h2 className="text-sm font-medium text-muted">{CATEGORY_LABEL[cat]}s</h2>
+            <h2 className="text-sm font-medium text-muted">{CATEGORY_LABEL[cat]}</h2>
             <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
               {list.slice(0, 30).map(({ r, advice }) => (
                 <li key={r.item_id}>
