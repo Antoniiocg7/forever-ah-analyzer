@@ -1,4 +1,4 @@
-import { craftCosts, craftEconomics, liquidityOf, type Acquire, type Market } from "./craft";
+import { cheapest, craftCosts, craftEconomics, liquidityOf, type Acquire, type Market, type RecipeInput } from "./craft";
 import { cheapestRoute, colorAt, colorsFor, SALE_PROBABILITY, type Chances, type ColorOffsets, type Colors, type Route } from "./leveling";
 import { toRecipeInput, type RecipeRow } from "./queries";
 
@@ -22,6 +22,8 @@ export type ShoppingLine = {
   unit: number;
   via: Acquire["via"];
   recipeId?: number;
+  /** Unidades en venta ahora (solo para lo que se compra en la subasta). */
+  available: number | null;
   /** Precio actual frente a su mediana de 7 días (0,2 = un 20% más barato). null si no aplica. */
   discount: number | null;
 };
@@ -56,7 +58,7 @@ function candidates(
   includeUnlistedPlans: boolean,
   sellOnAh: boolean,
 ) {
-  const crafted = craftCosts(craftable.map(toRecipeInput), markets);
+  const craftedFor = craftedBySkill(recipes, craftable, markets);
   const out: PlanRecipe[] = [];
   const skipped = { noSkill: 0, noPrice: 0, unlistedPlans: 0 };
   for (const recipe of recipes) {
@@ -64,7 +66,7 @@ function candidates(
       skipped.noSkill++;
       continue;
     }
-    const econ = craftEconomics(toRecipeInput(recipe), markets, crafted, s.cut);
+    const econ = craftEconomics(toRecipeInput(recipe), markets, craftedFor(recipe.skill_req), s.cut);
     if (econ.cost === null) {
       skipped.noPrice++;
       continue;
@@ -91,7 +93,26 @@ function candidates(
       lines: econ.lines.map((l) => ({ itemId: l.itemId, qty: l.qty, acquire: l.acquire })),
     });
   }
-  return { list: out, skipped };
+  return { list: out, skipped, craftedFor };
+}
+
+/**
+ * Coste de fabricar intermedios según el nivel de la receta que los usa: de la propia profesión solo
+ * cuentan las recetas de nivel ≤ al de esa receta (a nivel 150 no puedes hacer un intermedio de 250).
+ * Las de tus otras profesiones cuentan todas: la web no sabe qué nivel tienes en ellas.
+ */
+function craftedBySkill(recipes: RecipeRow[], craftable: RecipeRow[], markets: ReadonlyMap<number, Market>) {
+  const slug = recipes[0]?.profession_slug;
+  const cache = new Map<number, Map<number, Acquire>>();
+  return (skill: number) => {
+    let m = cache.get(skill);
+    if (!m) {
+      const usable = craftable.filter((r) => r.profession_slug !== slug || (r.skill_req !== null && r.skill_req <= skill));
+      m = craftCosts(usable.map(toRecipeInput), markets);
+      cache.set(skill, m);
+    }
+    return m;
+  };
 }
 
 const toRoute = (list: PlanRecipe[], from: number, to: number, chances: Chances) =>
@@ -119,7 +140,8 @@ export function buildPlan(args: {
   sellOnAh: boolean;
 }): Plan {
   const { recipes, craftable, markets, settings, from, to, includeUnlistedPlans, sellOnAh } = args;
-  const { list, skipped } = candidates(recipes, craftable, markets, settings, includeUnlistedPlans, sellOnAh);
+  const { list, skipped, craftedFor } = candidates(recipes, craftable, markets, settings, includeUnlistedPlans, sellOnAh);
+  const craftableById = new Map<number, RecipeInput>(craftable.map((r) => [r.id, toRecipeInput(r)]));
   const route = toRoute(list, from, to, settings.chances);
   const byId = new Map(list.map((c) => [c.recipe.id, c]));
 
@@ -136,16 +158,9 @@ export function buildPlan(args: {
     if (c.recipe.learned_from_item !== null && c.learnCost && !plansToBuy.some((p) => p.recipeId === c.recipe.id)) {
       plansToBuy.push({ recipeId: c.recipe.id, itemId: c.recipe.learned_from_item, price: c.learnCost });
     }
+    const crafted = craftedFor(c.recipe.skill_req ?? 0);
     for (const l of c.lines) {
-      if (!l.acquire) continue;
-      const key = `${l.itemId}|${l.acquire.via}`;
-      const cur = shop.get(key);
-      if (cur) cur.qty += l.qty * crafts;
-      else {
-        const m = markets.get(l.itemId);
-        const discount = l.acquire.via === "ah" && m?.market && m.market7d ? 1 - m.market / m.market7d : null;
-        shop.set(key, { itemId: l.itemId, qty: l.qty * crafts, unit: l.acquire.unit, via: l.acquire.via, recipeId: l.acquire.recipeId, discount });
-      }
+      if (l.acquire) addToShop(shop, markets, craftableById, crafted, l.itemId, l.qty * crafts, l.acquire, 0);
     }
   }
 
@@ -164,6 +179,43 @@ export function buildPlan(args: {
     medianCost,
     skipped,
   };
+}
+
+const MAX_DEPTH = 5;
+
+/**
+ * Añade a la lista de la compra `qty` unidades de un material. Si sale más barato fabricarlo, se
+ * apunta como "fabricar" y se añaden también sus materiales (p. ej. Thorium Bar → Thorium Ore),
+ * en cadena, para que la lista diga todo lo que hay que comprar.
+ */
+export function addToShop(
+  shop: Map<string, ShoppingLine>,
+  markets: ReadonlyMap<number, Market>,
+  recipes: ReadonlyMap<number, RecipeInput>,
+  crafted: ReadonlyMap<number, Acquire>,
+  itemId: number,
+  qty: number,
+  acquire: Acquire,
+  depth = 0,
+) {
+  const key = `${itemId}|${acquire.via}`;
+  const cur = shop.get(key);
+  if (cur) cur.qty += qty;
+  else {
+    const m = markets.get(itemId);
+    const discount = acquire.via === "ah" && m?.market && m.market7d ? 1 - m.market / m.market7d : null;
+    shop.set(key, { itemId, qty, unit: acquire.unit, via: acquire.via, recipeId: acquire.recipeId, discount, available: acquire.via === "ah" ? (m?.qty ?? 0) : null });
+  }
+  if (acquire.via !== "craft" || acquire.recipeId === undefined || depth >= MAX_DEPTH) return;
+  const r = recipes.get(acquire.recipeId);
+  if (!r || r.yieldsQty <= 0) return;
+  const batches = Math.ceil(qty / r.yieldsQty - 1e-9);
+  for (const g of r.reagents) {
+    // No se usa la misma receta para su propio material (evita bucles).
+    const own = crafted.get(g.itemId);
+    const sub = cheapest(g.itemId, markets, own && own.recipeId !== r.id ? new Map([[g.itemId, own]]) : new Map());
+    if (sub) addToShop(shop, markets, recipes, crafted, g.itemId, g.qty * batches, sub, depth + 1);
+  }
 }
 
 export { colorAt };

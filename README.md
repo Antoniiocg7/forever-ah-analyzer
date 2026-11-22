@@ -64,7 +64,7 @@ lanza el workflow a :35 de cada hora llamando a la API de GitHub. Para activarlo
 Sin ese token `trigger_ingest()` no hace nada y solo queda el cron de GitHub. La portada avisa si la última ingesta
 tiene más de 2 h y media.
 
-El resumen diario, el borrado de datos horarios de más de 7 días y de diarios de más de 180 los hace `pg_cron`.
+El resumen diario, el borrado de datos horarios de más de 7 días y de diarios de más de 90 los hace `pg_cron` (si la base pasa de 400 MB, el horario se recorta a 3 días).
 
 ## Comandos
 

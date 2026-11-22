@@ -161,29 +161,56 @@ async function Planner({ params, searchParams }: PageProps<"/professions/[slug]/
                   <span className="shrink-0 font-mono">{formatMoney(p.price)}</span>
                 </li>
               ))}
-              {plan.shopping.map((l) => {
-                const cheap = l.discount !== null && l.discount >= 0.1;
-                const dear = l.discount !== null && l.discount <= -0.15;
-                return (
-                  <li key={`${l.itemId}-${l.via}`} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                    <Link href={`/item/${l.itemId}?house=${house.id}`} className="flex min-w-0 items-center gap-2">
-                      <ItemIcon src={info.get(l.itemId)?.icon} quality={info.get(l.itemId)?.quality} size={22} />
-                      <span className="min-w-0">
-                        <span className="block truncate">
-                          {l.qty} × {name(l.itemId)}
+              {plan.shopping
+                .filter((l) => l.via !== "craft")
+                .map((l) => {
+                  const cheap = l.discount !== null && l.discount >= 0.1;
+                  const dear = l.discount !== null && l.discount <= -0.15;
+                  const short = l.available !== null && l.qty > l.available;
+                  return (
+                    <li key={`${l.itemId}-${l.via}`} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                      <Link href={`/item/${l.itemId}?house=${house.id}`} className="flex min-w-0 items-center gap-2">
+                        <ItemIcon src={info.get(l.itemId)?.icon} quality={info.get(l.itemId)?.quality} size={22} />
+                        <span className="min-w-0">
+                          <span className="block truncate">
+                            {l.qty} × {name(l.itemId)}
+                          </span>
+                          <span className="block text-[11px] text-muted">
+                            {VIA[l.via]} · {formatMoney(l.unit)} c/u
+                            {cheap && <span className="text-good"> · barato ahora (−{Math.round(l.discount! * 100)}%)</span>}
+                            {dear && <span className="text-bad"> · caro ahora (+{Math.round(-l.discount! * 100)}%)</span>}
+                            {short && <span className="text-bad"> · solo hay {l.available} en venta: el precio subirá al comprar más</span>}
+                          </span>
                         </span>
-                        <span className="block text-[11px] text-muted">
-                          {l.via === "craft" ? `fabricar (${recipesName(craftable, l.recipeId)})` : VIA[l.via]} · {formatMoney(l.unit)} c/u
-                          {cheap && <span className="text-good"> · barato ahora (−{Math.round(l.discount! * 100)}%)</span>}
-                          {dear && <span className="text-bad"> · caro ahora (+{Math.round(-l.discount! * 100)}%)</span>}
-                        </span>
-                      </span>
-                    </Link>
-                    <span className="shrink-0 font-mono">{formatMoney(l.unit * l.qty)}</span>
-                  </li>
-                );
-              })}
+                      </Link>
+                      <span className="shrink-0 font-mono">{formatMoney(l.unit * l.qty)}</span>
+                    </li>
+                  );
+                })}
             </ul>
+            {plan.shopping.some((l) => l.via === "craft") && (
+              <>
+                <h3 className="pt-2 text-xs font-medium text-muted">Fabricar tú (sus materiales ya están en la lista de arriba)</h3>
+                <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface text-sm">
+                  {plan.shopping
+                    .filter((l) => l.via === "craft")
+                    .map((l) => (
+                      <li key={`${l.itemId}-craft`} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                        <Link href={`/item/${l.itemId}?house=${house.id}`} className="flex min-w-0 items-center gap-2">
+                          <ItemIcon src={info.get(l.itemId)?.icon} quality={info.get(l.itemId)?.quality} size={22} />
+                          <span className="truncate">
+                            {l.qty} × {name(l.itemId)}
+                          </span>
+                        </Link>
+                        <span className="shrink-0 text-right text-xs text-muted">
+                          {recipesName(craftable, l.recipeId)}
+                          <span className="block font-mono">{formatMoney(l.unit)} c/u</span>
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              </>
+            )}
           </section>
 
           <section className="space-y-2">

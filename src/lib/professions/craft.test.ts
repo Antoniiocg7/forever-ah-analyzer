@@ -112,3 +112,14 @@ describe("liquidityOf", () => {
     expect(liquidityOf(m({ numAuctions: 1, soldPerDay: null }))).toBe("thin");
   });
 });
+
+describe("addToShop (lista de la compra del planificador)", () => {
+  it("al fabricar un material añade también lo que hay que comprar para hacerlo", async () => {
+    const { addToShop } = await import("./plan");
+    const crafted = craftCosts([smeltBar], markets);
+    const shop = new Map();
+    addToShop(shop, markets, new Map([[smeltBar.id, smeltBar]]), crafted, BAR, 10, crafted.get(BAR)!);
+    expect(shop.get(`${BAR}|craft`)).toMatchObject({ qty: 10 });
+    expect(shop.get(`${ORE}|ah`)).toMatchObject({ qty: 20, available: 100 });
+  });
+});

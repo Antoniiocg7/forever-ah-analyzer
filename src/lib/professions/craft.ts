@@ -73,7 +73,7 @@ export function craftCosts(recipes: RecipeInput[], markets: ReadonlyMap<number, 
   return best;
 }
 
-function cheapest(itemId: number, markets: ReadonlyMap<number, Market>, crafted: ReadonlyMap<number, Acquire>): Acquire | null {
+export function cheapest(itemId: number, markets: ReadonlyMap<number, Market>, crafted: ReadonlyMap<number, Acquire>): Acquire | null {
   const buy = buyPrice(markets.get(itemId));
   const craft = crafted.get(itemId);
   if (buy && (!craft || buy.unit <= craft.unit)) return buy;

@@ -67,6 +67,9 @@ export async function ingestHouse(
   rulesetId: number,
   houseId: number,
 ): Promise<IngestResult> {
+  // Si algo falla después de crear el snapshot, se deshace para que la siguiente ejecución lo
+  // vuelva a intentar (si no, If-Modified-Since daría "sin cambios" y esa hora quedaría a medias).
+  let snapshotId: number | null = null;
   try {
     const last = await must(
       db.from("snapshots").select("last_modified_header").eq("house_id", houseId).order("fetched_at", { ascending: false }).limit(1),
@@ -111,6 +114,7 @@ export async function ingestHouse(
         .single(),
     );
     if (!snapshot) throw new Error("No se pudo crear el snapshot");
+    snapshotId = snapshot.id as number;
 
     const rows: Record<string, number | null>[] = [...aggregates.values()].map((a) => ({
       snapshot_id: snapshot.id,
@@ -158,11 +162,16 @@ export async function ingestHouse(
         state: encodeState(toCompact(listings)),
       }),
     );
+    snapshotId = null; // completo: ya no hay que deshacer nada
     await must(db.from("houses").update({ auction_count: listings.length }).eq("id", houseId));
 
     return { houseId, status: "ok", items: rows.length, auctions: listings.length, gapMinutes };
   } catch (err) {
     await logError(db, houseId, "ingest", err);
+    if (snapshotId !== null) {
+      await db.from("item_prices_hourly").delete().eq("snapshot_id", snapshotId);
+      await db.from("snapshots").delete().eq("id", snapshotId);
+    }
     return { houseId, status: "error" };
   }
 }
