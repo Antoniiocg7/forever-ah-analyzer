@@ -5,7 +5,7 @@ import { GameContextBanner } from "@/components/GameContextBanner";
 import { HouseTabs } from "@/components/HouseTabs";
 import { ItemIcon } from "@/components/ItemIcon";
 import { Loading, NoHousesNotice, SetupNotice } from "@/components/notices";
-import { CATEGORY_LABEL, categorize, gameContext, type Category } from "@/lib/calendar";
+import { CATEGORY_LABEL, categorize, gameContext, investAdvice as adviceFor, type Advice, type Category } from "@/lib/calendar";
 import { calendarEvents, dealSettings, flipCandidates, marketableItems, vendorFlips } from "@/lib/deals-queries";
 import { isConfigured } from "@/lib/env";
 import { pick, type Lang } from "@/lib/lang";
@@ -23,7 +23,12 @@ export default function Page({ searchParams }: PageProps<"/deals">) {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-semibold">Chollos</h1>
-        <p className="mt-1 text-sm text-muted">Qué comprar ahora para ganar oro. Las compras se hacen a mano en el juego.</p>
+        <p className="mt-1 text-sm text-muted">
+          Qué comprar ahora para ganar oro. Las compras se hacen a mano en el juego.{" "}
+          <Link href="/alerts" className="text-gold underline">
+            Alertas de Telegram
+          </Link>
+        </p>
       </div>
       <Suspense>
         <GameContextBanner />
@@ -148,19 +153,6 @@ async function VendorList({ houseId }: { houseId: number }) {
       </p>
     </>
   );
-}
-
-type Advice = { label: string; className: string; rank: number };
-
-/** Recomendación para los objetos de raid según su precio frente a la mediana y su tendencia. */
-function adviceFor(r: LatestPriceRow, raidSoon: boolean): Advice {
-  const trend = r.trend ?? 0;
-  const discount = r.discount ?? 0;
-  if (trend >= 0.15) return { label: "Ya ha subido", className: "text-bad", rank: 4 };
-  // Si se está desplomando, mejor esperar a que se estabilice que comprar a mitad de caída.
-  if (trend <= -0.25) return { label: "Bajando: espera", className: "text-gold", rank: 3 };
-  if (raidSoon && discount >= 0 && trend <= 0.1) return { label: "Comprar ahora", className: "text-good", rank: 1 };
-  return { label: "Vigilar", className: "text-muted", rank: 2 };
 }
 
 async function InvestList({ houseId }: { houseId: number }) {

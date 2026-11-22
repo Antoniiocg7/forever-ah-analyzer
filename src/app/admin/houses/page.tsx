@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { Loading, SetupNotice } from "@/components/notices";
@@ -26,7 +27,12 @@ export default function Page({ searchParams }: PageProps<"/admin/houses">) {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-semibold">Casas de subastas</h1>
-        <p className="mt-1 text-sm text-muted">Qué casas se descargan cada hora. Solo necesitas tocar esto una vez.</p>
+        <p className="mt-1 text-sm text-muted">
+          Qué casas se descargan cada hora. Solo necesitas tocar esto una vez. ·{" "}
+          <Link href="/alerts" className="text-gold underline">
+            Alertas de Telegram
+          </Link>
+        </p>
       </div>
       <Suspense fallback={<Loading />}>
         <Houses searchParams={searchParams} />

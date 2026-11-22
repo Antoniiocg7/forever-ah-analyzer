@@ -10,6 +10,7 @@ import { formatMoney } from "@/lib/money";
 import { MAX_SKILL } from "@/lib/professions/leveling";
 import { buildPlan, colorAt } from "@/lib/professions/plan";
 import { economySettings, marketData, recipesFor } from "@/lib/professions/queries";
+import { browserProfessions } from "@/lib/prefs";
 import { trackedHouses } from "@/lib/queries";
 
 const SOURCE: Record<string, string> = { item: "oficial", manual: "corregido", classic: "aprox. (Classic)", estimate: "aprox." };
@@ -52,7 +53,7 @@ async function Planner({ params, searchParams }: PageProps<"/professions/[slug]/
   const profession = pick(recipes[0].profession, recipes[0].profession_es, lang) ?? recipes[0].profession;
   const submitted = typeof sp.from === "string";
 
-  const settings = await economySettings(house.faction);
+  const settings = await economySettings(house.faction, await browserProfessions());
   const craftable = await recipesFor([...new Set([...settings.myProfessions, slug])]);
   const ids = new Set<number>();
   for (const r of [...recipes, ...craftable]) {

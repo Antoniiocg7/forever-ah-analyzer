@@ -1,4 +1,3 @@
-import { browserProfessions } from "../prefs";
 import { supabaseAdmin } from "../supabase";
 import type { DepositSettings, Market, RecipeInput } from "./craft";
 import { DEFAULT_CHANCES, DEFAULT_OFFSETS, type Chances, type ColorOffsets } from "./leveling";
@@ -150,7 +149,7 @@ export type EconomySettings = {
 };
 
 /** Comisión de la casa (según su facción), depósito y profesiones del jugador, desde `settings`. */
-export async function economySettings(faction: string): Promise<EconomySettings> {
+export async function economySettings(faction: string, fromBrowser: string[] | null = null): Promise<EconomySettings> {
   const rows = unwrap<{ key: string; value: unknown }[]>(
     await supabaseAdmin().from("settings").select("key, value").in("key", ["ah_cut", "deposit", "my_professions", "skillup_colors", "skillup_chance"]),
   );
@@ -159,7 +158,6 @@ export async function economySettings(faction: string): Promise<EconomySettings>
   const cut = cuts[faction];
   const deposit = (get("deposit") ?? { deposit_min: 100, pct: { "2": 0.05, "8": 0.2, "24": 0.6 } }) as DepositSettings;
   const mine = get("my_professions");
-  const fromBrowser = await browserProfessions();
   return {
     cut: typeof cut === "number" ? cut : 0.05,
     cutConfirmed: typeof cut === "number",

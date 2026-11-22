@@ -1,6 +1,7 @@
 // Ingesta horaria de las casas marcadas como `tracked`.
 // Uso: pnpm ingest
-import { enrichItems, ingestHouse } from "../src/lib/ingest";
+import { runAlerts } from "../src/lib/alerts/run";
+import { enrichItems, ingestHouse, logError } from "../src/lib/ingest";
 import { setup } from "./_setup";
 
 async function main(): Promise<number> {
@@ -25,6 +26,14 @@ async function main(): Promise<number> {
   const { named, icons } = await enrichItems(db, blizzard, houses.map((h) => h.id));
   const mem = Math.round(process.memoryUsage().rss / 1024 / 1024);
   console.log(`Objetos consultados: ${named}. Iconos: ${icons}. Tiempo: ${((Date.now() - started) / 1000).toFixed(1)} s. Memoria: ${mem} MB.`);
+  // Alertas de Telegram: un fallo aquí nunca rompe la ingesta.
+  try {
+    const a = await runAlerts(db);
+    console.log(a.skipped ? `Alertas: no se envían (${a.skipped}).` : `Alertas enviadas: ${a.sent}.`);
+    for (const e of a.errors) await logError(db, null, "alerts", e);
+  } catch (err) {
+    await logError(db, null, "alerts", err);
+  }
   return failed ? 1 : 0;
 }
 

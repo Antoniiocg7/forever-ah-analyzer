@@ -11,6 +11,7 @@ import { formatMoney } from "@/lib/money";
 import { craftCosts, craftEconomics, type CraftResult, type Liquidity } from "@/lib/professions/craft";
 import { colorsFor, type ColorOffsets } from "@/lib/professions/leveling";
 import { economySettings, marketData, recipesFor, toRecipeInput, type ItemInfo, type RecipeRow } from "@/lib/professions/queries";
+import { browserProfessions } from "@/lib/prefs";
 import { trackedHouses } from "@/lib/queries";
 import { saveRecipeSkill } from "../actions";
 
@@ -69,7 +70,7 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
   const q = typeof sp.q === "string" ? sp.q.trim() : "";
   const reliable = sp.fiables === "1";
 
-  const [settings, lang] = await Promise.all([economySettings(house.faction), nameLang()]);
+  const [settings, lang] = await Promise.all([browserProfessions().then((b) => economySettings(house.faction, b)), nameLang()]);
   const recipeTitle = (r: RecipeRow) => pick(r.name_en, r.name_es, lang) ?? r.name_en;
   // Para abaratar materiales se pueden fabricar con tus profesiones (p. ej. fundir barras).
   const craftable = await recipesFor([...new Set([...settings.myProfessions, slug])]);

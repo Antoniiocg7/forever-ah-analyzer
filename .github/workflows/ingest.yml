@@ -28,3 +28,5 @@ jobs:
           BLIZZARD_REGION: eu
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          PUBLIC_URL: https://forever-ah-analyzer.vercel.app

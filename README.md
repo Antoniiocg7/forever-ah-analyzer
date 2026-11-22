@@ -28,6 +28,19 @@ https://forever-ah-analyzer.vercel.app (Vercel, plan gratis). Cada push a `main`
 Variables en Vercel (Production): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` y `ADMIN_TOKEN`. Publicada, la web pide
 `ADMIN_TOKEN` para marcar casas o corregir niveles de receta; en local (`pnpm dev`) no.
 
+## Alertas de Telegram
+
+Tras cada descarga horaria se revisan (página `/alerts`):
+- **Chollos** para revender con beneficio ≥ `min_deal_profit` (máx. `max_per_run` por hora).
+- **Precios que vigilas**: desde la ficha de un objeto, "Avísame si baja de / sube de".
+- **Buen momento para subir** las profesiones que elijas (≥15% más barato que una semana normal).
+- **Resumen diario** a la hora elegida (hora de Polonia).
+
+Antispam: un aviso por objeto cada 6 h (24 h para profesiones). Para conectarlo:
+1. En Telegram, @BotFather → `/newbot` → copia el token a `.env.local` como `TELEGRAM_BOT_TOKEN`
+   (y como secreto `TELEGRAM_BOT_TOKEN` en GitHub y variable en Vercel).
+2. Escribe a tu bot y ejecuta `pnpm telegram-setup`: guarda tu chat y te manda un mensaje de prueba.
+
 ## Ingesta horaria
 
 `.github/workflows/ingest.yml` ejecuta `pnpm ingest`. Necesita estos secretos en el repo de GitHub:
@@ -62,6 +75,8 @@ El resumen diario, el borrado de datos horarios de más de 7 días y de diarios 
 | `pnpm ingest` | Ingesta de las casas marcadas |
 | `pnpm sync-recipes` | Descarga todas las recetas de todas las profesiones (una vez, y tras cada parche) |
 | `pnpm sync-skills` | Nivel de cada receta para el planificador: oficial (planos, patrones) o estimado (después de `sync-recipes`) |
+| `pnpm telegram-setup` | Conecta tu chat de Telegram a las alertas |
+| `pnpm sync-names` | Nombres en español de objetos y tipos de objeto |
 | `pnpm test` | Tests (Vitest) |
 | `pnpm typecheck` / `pnpm lint` | Comprobaciones |
 

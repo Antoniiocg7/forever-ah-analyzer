@@ -92,3 +92,16 @@ export function categorize(name: string | null): Category | null {
   if (LEVELING_MATERIAL.some((r) => r.test(name))) return "leveling-material";
   return null;
 }
+
+export type Advice = { label: string; className: string; rank: number; buy: boolean };
+
+/** Recomendación para un objeto de raid según su precio frente a la mediana y su tendencia semanal. */
+export function investAdvice(r: { trend: number | null; discount: number | null }, raidSoon: boolean): Advice {
+  const trend = r.trend ?? 0;
+  const discount = r.discount ?? 0;
+  if (trend >= 0.15) return { label: "Ya ha subido", className: "text-bad", rank: 4, buy: false };
+  // Si se está desplomando, mejor esperar a que se estabilice que comprar a mitad de caída.
+  if (trend <= -0.25) return { label: "Bajando: espera", className: "text-gold", rank: 3, buy: false };
+  if (raidSoon && discount >= 0 && trend <= 0.1) return { label: "Comprar ahora", className: "text-good", rank: 1, buy: true };
+  return { label: "Vigilar", className: "text-muted", rank: 2, buy: false };
+}

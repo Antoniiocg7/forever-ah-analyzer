@@ -8,7 +8,10 @@ import { PriceChart } from "@/components/PriceChart";
 import { isConfigured } from "@/lib/env";
 import { pick, wowheadItemUrl, type Lang } from "@/lib/lang";
 import { nameLang } from "@/lib/lang-server";
+import { adminTokenRequired } from "@/lib/admin";
 import { formatMoney } from "@/lib/money";
+import { supabaseAdmin } from "@/lib/supabase";
+import { addWatch, removeWatch } from "@/app/alerts/actions";
 import { recipesForItem, type RecipeLink } from "@/lib/professions/queries";
 import { dailySeries, hourlySeries, itemById, itemClassNames, latestPrice, trackedHouses } from "@/lib/queries";
 
@@ -102,6 +105,8 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
 
       <PriceChart hourly={hourly} daily={daily} />
 
+      <WatchForm itemId={itemId} back={`/item/${itemId}?house=${house.id}`} msg={typeof sp.msg === "string" ? sp.msg : undefined} current={latest?.min_buyout ?? null} />
+
       <RecipeList title="Se fabrica con" recipes={recipes.makes} houseId={house.id} lang={lang} />
       <RecipeList title="Se usa en" recipes={recipes.uses} houseId={house.id} lang={lang} showQty />
 
@@ -136,6 +141,58 @@ function RecipeList({ title, recipes, houseId, lang, showQty }: { title: string;
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+const WATCH_MSG: Record<string, { text: string; ok: boolean }> = {
+  aviso: { text: "Aviso guardado: te llegará por Telegram.", ok: true },
+  quitado: { text: "Aviso quitado.", ok: true },
+  token: { text: "La contraseña de administración no es correcta.", ok: false },
+  invalid: { text: "Precio no válido. Escríbelo como 1g 20s, 35s o 1,5.", ok: false },
+};
+
+/** "Avísame cuando el mínimo baje de / suba de X" (lista de seguimiento, se avisa por Telegram). */
+async function WatchForm({ itemId, back, msg, current }: { itemId: number; back: string; msg?: string; current: number | null }) {
+  const { data } = await supabaseAdmin().from("watchlist").select("target_price, direction").eq("item_id", itemId).maybeSingle();
+  const needToken = adminTokenRequired();
+  const m = msg ? WATCH_MSG[msg] : undefined;
+  return (
+    <section className="card space-y-2 text-sm">
+      <h2 className="font-medium">Avísame por Telegram</h2>
+      {m && <p className={m.ok ? "text-good" : "text-bad"}>{m.text}</p>}
+      {data && (
+        <form action={removeWatch} className="flex items-center justify-between gap-2">
+          <span className="text-muted">
+            Ahora: {data.direction === "below" ? "si baja de" : "si sube de"} {formatMoney(Number(data.target_price))}
+          </span>
+          <input type="hidden" name="itemId" value={itemId} />
+          <input type="hidden" name="back" value={back} />
+          {needToken && <input name="token" type="password" required placeholder="Contraseña" className="input w-32" aria-label="Contraseña de administración" />}
+          <button className="min-h-9 shrink-0 rounded-lg border border-line px-3 text-muted">Quitar</button>
+        </form>
+      )}
+      <form action={addWatch} className="grid grid-cols-[auto_1fr] gap-2">
+        <input type="hidden" name="itemId" value={itemId} />
+        <input type="hidden" name="back" value={back} />
+        <select name="direction" defaultValue={data?.direction ?? "below"} className="input w-auto" aria-label="Cuándo avisar">
+          <option value="below">Si baja de</option>
+          <option value="above">Si sube de</option>
+        </select>
+        <input
+          name="target"
+          className="input"
+          placeholder={current ? `p. ej. ${formatMoney(Math.round(current * 0.85))}` : "p. ej. 1g 20s"}
+          defaultValue={data ? formatMoney(Number(data.target_price)) : ""}
+          required
+          aria-label="Precio"
+        />
+        {needToken && <input name="token" type="password" required placeholder="Contraseña" className="input col-span-2" aria-label="Contraseña de administración" />}
+        <button className="btn col-span-2">{data ? "Cambiar aviso" : "Guardar aviso"}</button>
+      </form>
+      <Link href="/alerts" className="inline-block text-xs text-gold underline">
+        Configurar alertas
+      </Link>
     </section>
   );
 }
