@@ -18,9 +18,9 @@ export type AlertSettings = {
 export const DEFAULT_ALERTS: AlertSettings = { enabled: true, minDealProfit: 50000, maxPerRun: 5, dailyHour: 9, lang: "en", leveling: [] };
 
 /** Horas de antispam por tipo (CLAUDE.md: como mucho una alerta por objeto cada 6 h). */
-export const COOLDOWN_HOURS = { deal: 6, watch: 6, leveling: 24 } as const;
+export const COOLDOWN_HOURS = { deal: 6, watch: 6, leveling: 24, reset: 12 } as const;
 
-export type Alert = { key: string; kind: "deal" | "watch" | "leveling" | "digest" | "test"; itemId?: number; html: string };
+export type Alert = { key: string; kind: "deal" | "watch" | "leveling" | "reset" | "digest" | "test"; itemId?: number; html: string };
 
 export type DealCandidate = {
   itemId: number;
@@ -82,6 +82,34 @@ export function levelingAlerts(results: LevelingCandidate[], recent: ReadonlySet
         `Ahora cuesta ${formatMoney(r.cost)}, un ${Math.round((1 - r.cost / r.medianCost) * 100)}% menos que una semana normal (${formatMoney(r.medianCost)}).\n` +
         link(base, `/professions/${r.slug}/plan?from=${r.from}&to=${r.to}`, "Ver la ruta y la lista de la compra"),
     }));
+}
+
+export type ResetCandidateAlert = { itemId: number; name: string; prevMin: number; newMin: number; market: number; units: number; cost: number; minNow: number | null };
+
+/**
+ * Resets de otros recién detectados (en la última descarga) en los que se ha movido al menos el
+ * beneficio mínimo de chollo. Sirve para vender lo que tengas mientras el precio está alto.
+ */
+export function resetAlerts(events: ResetCandidateAlert[], s: AlertSettings, recent: ReadonlySet<string>, base: string): Alert[] {
+  return events
+    .filter((e) => e.cost >= s.minDealProfit && !recent.has(`reset:${e.itemId}`))
+    .sort((a, b) => b.cost - a.cost)
+    .slice(0, s.maxPerRun)
+    .map((e) => {
+      const sellAt = (e.minNow ?? e.newMin) - 1;
+      return {
+        key: `reset:${e.itemId}`,
+        kind: "reset",
+        itemId: e.itemId,
+        html:
+          `🚨 <b>Reset</b> en ${link(base, `/item/${e.itemId}`, e.name)}
+` +
+          `Alguien compró ${e.units} por ${formatMoney(e.cost)}. Mínimo ${formatMoney(e.prevMin)} → <b>${formatMoney(e.newMin)}</b> ` +
+          `(normal ${formatMoney(e.market)}).
+` +
+          `Si tienes, vende a ${formatMoney(sellAt)}. Si no, no compres caro: puede caerse.`,
+      };
+    });
 }
 
 /** Fecha y hora en Polonia. */

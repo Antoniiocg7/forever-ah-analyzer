@@ -3,6 +3,7 @@ import { BlizzardClient } from "./blizzard/client";
 import { factionFromName } from "./blizzard/schemas";
 import { aggregateListings } from "./pricing/aggregate";
 import { computeDepth } from "./pricing/deals";
+import { detectResets, resetStatus, type DetectedReset } from "./pricing/market-events";
 import { detectBait } from "./pricing/reset";
 import { decodeState, encodeState, estimateListings, estimateSales, toCompact } from "./pricing/sales";
 import { REFERENCE_ITEMS } from "./reference-items";
@@ -84,11 +85,13 @@ export async function ingestHouse(
     const dataAt = dataTime(lastModified, fetchedAt);
 
     const aggregates = aggregateListings(listings);
-    const depth = computeDepth(listings, ...(await depthReferences(db, houseId)));
+    const [market7d, vendorSell] = await depthReferences(db, houseId);
+    const depth = computeDepth(listings, market7d, vendorSell);
 
     // Ventas: diferencia con el estado anterior. Si el estado está corrupto, se sigue sin estimar.
     let sold: Map<number, number> | null = null;
     let listed: Map<number, number> | null = null;
+    let resets: DetectedReset[] = [];
     let gapMs: number | null = null;
     const prev = await must(db.from("house_state").select("data_at, fetched_at, state").eq("house_id", houseId).maybeSingle());
     if (prev) {
@@ -97,6 +100,7 @@ export async function ingestHouse(
         const prevState = decodeState(prev.state as string);
         sold = estimateSales(prevState, listings, gapMs);
         listed = sold ? estimateListings(prevState, listings, sold) : null;
+        resets = sold ? detectResets(prevState, listings, market7d, sold) : [];
       } catch (err) {
         await logError(db, houseId, "state", err);
       }
@@ -176,6 +180,14 @@ export async function ingestHouse(
     snapshotId = null; // completo: ya no hay que deshacer nada
     await must(db.from("houses").update({ auction_count: listings.length }).eq("id", houseId));
 
+    // Resets de otros: se guardan los nuevos y se actualiza si los abiertos aguantan. Un fallo aquí
+    // no debe romper la ingesta.
+    try {
+      await trackResets(db, houseId, snapshot.id as number, dataAt, resets, (id) => aggregates.get(id)?.minBuyout ?? null);
+    } catch (err) {
+      await logError(db, houseId, "resets", err);
+    }
+
     return { houseId, status: "ok", items: rows.length, auctions: listings.length, gapMinutes };
   } catch (err) {
     await logError(db, houseId, "ingest", err);
@@ -185,6 +197,48 @@ export async function ingestHouse(
     }
     return { houseId, status: "error" };
   }
+}
+
+/** Guarda los resets detectados en esta hora y cierra los abiertos que se han caído o han aguantado 24 h. */
+async function trackResets(
+  db: SupabaseClient,
+  houseId: number,
+  snapshotId: number,
+  now: Date,
+  detected: DetectedReset[],
+  minNow: (itemId: number) => number | null,
+) {
+  const open = await must(
+    db.from("market_events").select("id, item_id, prev_min, market, detected_at, peak_min").eq("house_id", houseId).eq("status", "open"),
+  );
+  const openItems = new Set((open ?? []).map((e) => e.item_id as number));
+  for (const e of open ?? []) {
+    const min = minNow(e.item_id as number);
+    const status = resetStatus({ prevMin: Number(e.prev_min), market: Number(e.market), detectedAt: new Date(e.detected_at as string) }, min, now);
+    const peak = Math.max(Number(e.peak_min ?? 0), min ?? 0) || null;
+    await must(
+      db
+        .from("market_events")
+        .update({ status, peak_min: peak, resolved_at: status === "open" ? null : now.toISOString() })
+        .eq("id", e.id),
+    );
+  }
+  // Uno nuevo por objeto: si ya hay uno abierto, es el mismo reset que sigue subiendo.
+  const rows = detected
+    .filter((r) => !openItems.has(r.itemId))
+    .map((r) => ({
+      house_id: houseId,
+      item_id: r.itemId,
+      snapshot_id: snapshotId,
+      detected_at: now.toISOString(),
+      prev_min: r.prevMin,
+      new_min: r.newMin,
+      market: Math.round(r.market),
+      units: r.units,
+      cost: r.cost,
+      peak_min: r.newMin,
+    }));
+  if (rows.length) await must(db.from("market_events").insert(rows));
 }
 
 type ItemData = NonNullable<Awaited<ReturnType<BlizzardClient["item"]>>>;

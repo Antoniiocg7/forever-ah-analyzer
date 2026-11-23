@@ -130,3 +130,88 @@ export async function resetCandidates(houseId: number, s: DealSettings, budget: 
   }
   return out.sort((a, b) => b.reset.expectedProfit - a.reset.expectedProfit);
 }
+
+export type MarketEvent = {
+  id: number;
+  item_id: number;
+  detected_at: string;
+  prev_min: number;
+  new_min: number;
+  market: number;
+  units: number;
+  cost: number;
+  status: "open" | "held" | "failed";
+  resolved_at: string | null;
+  peak_min: number | null;
+};
+
+const EVENT_COLS = "id, item_id, detected_at, prev_min, new_min, market, units, cost, status, resolved_at, peak_min";
+
+/** Resets de otros jugadores de las últimas `hours` horas, los más recientes primero. */
+export async function recentResets(houseId: number, hours = 72): Promise<MarketEvent[]> {
+  const since = new Date(Date.now() - hours * 3600_000).toISOString();
+  return unwrap(
+    await supabaseAdmin()
+      .from("market_events")
+      .select(EVENT_COLS)
+      .eq("house_id", houseId)
+      .gte("detected_at", since)
+      .order("detected_at", { ascending: false })
+      .limit(100),
+  );
+}
+
+export type ResetHistory = { total: number; held: number; failed: number; open: number; avgHoursToFail: number | null; last: MarketEvent };
+
+/** Historial de resets ajenos por objeto: cuántos hubo y cuántos aguantaron. */
+export async function resetHistory(houseId: number, itemIds: number[]): Promise<Map<number, ResetHistory>> {
+  const out = new Map<number, ResetHistory>();
+  for (let i = 0; i < itemIds.length; i += 300) {
+    const rows = unwrap<MarketEvent[]>(
+      await supabaseAdmin()
+        .from("market_events")
+        .select(EVENT_COLS)
+        .eq("house_id", houseId)
+        .in("item_id", itemIds.slice(i, i + 300))
+        .order("detected_at", { ascending: false }),
+    );
+    const failHours = new Map<number, number[]>();
+    for (const e of rows) {
+      const h = out.get(e.item_id) ?? { total: 0, held: 0, failed: 0, open: 0, avgHoursToFail: null, last: e };
+      h.total++;
+      h[e.status]++;
+      if (e.status === "failed" && e.resolved_at) {
+        const list = failHours.get(e.item_id) ?? [];
+        list.push((Date.parse(e.resolved_at) - Date.parse(e.detected_at)) / 3600_000);
+        failHours.set(e.item_id, list);
+      }
+      out.set(e.item_id, h);
+    }
+    for (const [id, list] of failHours) out.get(id)!.avgHoursToFail = list.reduce((s, x) => s + x, 0) / list.length;
+  }
+  return out;
+}
+
+/** Filas de precio actuales de unos objetos (para nombre, icono y mínimo de ahora). */
+export async function latestRows(houseId: number, itemIds: number[]): Promise<Map<number, LatestPriceRow>> {
+  const out = new Map<number, LatestPriceRow>();
+  for (let i = 0; i < itemIds.length; i += 300) {
+    const rows = unwrap<LatestPriceRow[]>(
+      await supabaseAdmin().from("latest_item_prices").select("*").eq("house_id", houseId).in("item_id", itemIds.slice(i, i + 300)),
+    );
+    for (const r of rows) out.set(r.item_id, r);
+  }
+  return out;
+}
+
+export type ItemBasic = { id: number; name_en: string | null; name_es: string | null; quality: string | null; icon_url: string | null };
+
+/** Nombre e icono (para objetos que ya no están en venta, p. ej. agotados tras un reset). */
+export async function itemsBasic(ids: number[]): Promise<Map<number, ItemBasic>> {
+  if (ids.length === 0) return new Map();
+  const rows = unwrap<ItemBasic[]>(await supabaseAdmin().from("items").select("id, name_en, name_es, quality, icon_url").in("id", ids));
+  return new Map(rows.map((r) => [r.id, r]));
+}
+
+/** Horas desde una fecha (redondeadas, ≥ 0). */
+export const hoursSince = (iso: string) => Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 3600_000));

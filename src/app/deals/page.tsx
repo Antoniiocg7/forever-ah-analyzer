@@ -8,7 +8,23 @@ import { ItemIcon } from "@/components/ItemIcon";
 import { Loading, NoHousesNotice, SetupNotice } from "@/components/notices";
 import { PageIntro } from "@/components/PageIntro";
 import { CATEGORY_LABEL, categorize, gameContext, investAdvice as adviceFor, type Advice, type Category } from "@/lib/calendar";
-import { calendarEvents, dealSettings, flipCandidates, marketableItems, RESET_KINDS, resetCandidates, vendorFlips, type ResetKind } from "@/lib/deals-queries";
+import {
+  calendarEvents,
+  dealSettings,
+  flipCandidates,
+  hoursSince,
+  itemsBasic,
+  latestRows,
+  marketableItems,
+  recentResets,
+  RESET_KINDS,
+  resetCandidates,
+  resetHistory,
+  vendorFlips,
+  type MarketEvent,
+  type ResetHistory,
+  type ResetKind,
+} from "@/lib/deals-queries";
 import { isConfigured } from "@/lib/env";
 import { pick, type Lang } from "@/lib/lang";
 import { nameLang } from "@/lib/lang-server";
@@ -27,6 +43,10 @@ const TABS = {
   reset: {
     label: "Resetear mercado",
     desc: "Comprar todo lo barato de un objeto hasta el siguiente “muro” de precio y volver a publicarlo más caro. Solo sale a cuenta si se vende bien y nadie repone enseguida.",
+  },
+  others: {
+    label: "Resets de otros",
+    desc: "Objetos en los que alguien acaba de comprar todo lo barato y ha subido el precio. Si tienes ese objeto, es buen momento para vender; y su historial te dice si en ese objeto los resets aguantan.",
   },
   vendor: {
     label: "Comprar y vender al NPC",
@@ -96,6 +116,7 @@ async function Deals({ searchParams }: Pick<PageProps<"/deals">, "searchParams">
       <p className="text-sm text-muted">{TABS[tab].desc}</p>
       {tab === "flip" && <FlipList houseId={house.id} faction={house.faction} />}
       {tab === "reset" && <ResetList houseId={house.id} faction={house.faction} budget={budget} budgetParam={budgetParam} kind={kind} />}
+      {tab === "others" && <OthersList houseId={house.id} />}
       {tab === "vendor" && <VendorList houseId={house.id} />}
       {tab === "invest" && <InvestList houseId={house.id} />}
     </div>
@@ -195,6 +216,10 @@ async function ResetList({
   const lang = await nameLang();
   const s = await dealSettings(faction);
   const rows = (await resetCandidates(houseId, s, budget, kind)).slice(0, 40);
+  const history = await resetHistory(
+    houseId,
+    rows.map((r) => r.row.item_id),
+  );
   const kindHref = (k: ResetKind) => `/deals?house=${houseId}&tab=reset&tipo=${k}${budgetParam ? `&presupuesto=${encodeURIComponent(budgetParam)}` : ""}`;
   const restockUnknown = rows.some((r) => r.reset.restockUnknown);
 
@@ -264,6 +289,7 @@ async function ResetList({
                   <span>· {x.restockUnknown ? "reposición sin datos" : `≈${r.listed_per_day} repuestos/día`}</span>
                   <span>· {x.daysToSell === null ? "puede no venderse" : `≈${Math.ceil(x.daysToSell)} días en venderlo`}</span>
                 </p>
+                {history.get(r.item_id) && <HistoryLine h={history.get(r.item_id)!} />}
               </Link>
             </li>
           ))}
@@ -278,6 +304,115 @@ async function ResetList({
           <b>Beneficio esperado</b>: en {DEFAULT_HORIZON} días vendes una parte, según las ventas al día (menos cuanto más subes el precio) y
           lo que otros vuelven a publicar; lo que sobra se valora a su precio normal −10%, con el depósito perdido. <b>Máx.</b>: si lo vendieras
           todo a tu precio. <b>Riesgo alto</b>: se repone tan rápido como se vende o tardarías más de una semana.
+        </p>
+      </div>
+    </>
+  );
+}
+
+function EventStatus({ e }: { e: MarketEvent }) {
+  const dur = e.resolved_at ? Math.max(1, Math.round((Date.parse(e.resolved_at) - Date.parse(e.detected_at)) / 3600_000)) : null;
+  const [label, cls] =
+    e.status === "open"
+      ? [`aguantando · hace ${hoursSince(e.detected_at)} h`, "border-gold/60 text-gold"]
+      : e.status === "held"
+        ? ["aguantó 24 h", "border-good/60 text-good"]
+        : [`se cayó en ${dur} h`, "border-bad/60 text-bad"];
+  return <span className={`rounded border px-1.5 py-px ${cls}`}>{label}</span>;
+}
+
+/** Resumen del historial de resets ajenos de un objeto. */
+function HistoryLine({ h }: { h: ResetHistory }) {
+  const closed = h.held + h.failed;
+  return (
+    <p className="text-xs text-muted">
+      Resets de otros en este objeto: {h.total}
+      {closed > 0 && (
+        <>
+          {" "}
+          · <span className={h.held >= h.failed ? "text-good" : "text-bad"}>{h.held} de {closed} aguantaron 24 h</span>
+        </>
+      )}
+      {h.avgHoursToFail !== null && ` · los que se cayeron duraron ≈${Math.round(h.avgHoursToFail)} h`}
+    </p>
+  );
+}
+
+async function OthersList({ houseId }: { houseId: number }) {
+  const lang = await nameLang();
+  const events = await recentResets(houseId);
+  const ids = [...new Set(events.map((e) => e.item_id))];
+  const [latest, history] = await Promise.all([latestRows(houseId, ids), resetHistory(houseId, ids)]);
+  const basics = await itemsBasic(ids.filter((id) => !latest.has(id)));
+  const name = (id: number) => {
+    const r = latest.get(id) ?? basics.get(id);
+    return pick(r?.name_en, r?.name_es, lang) ?? `Objeto #${id}`;
+  };
+  const closed = events.filter((e) => e.status !== "open");
+  const held = closed.filter((e) => e.status === "held").length;
+
+  return (
+    <>
+      {events.length === 0 ? (
+        <p className="card text-sm text-muted">
+          En las últimas 72 h no se ha detectado ningún reset. Se empezaron a registrar el 23-11; se detectan cuando, de una hora a otra,
+          alguien compra lo barato de un objeto y el mínimo salta más de un 25% (y más de un 15% sobre su precio normal).
+        </p>
+      ) : (
+        <>
+          {closed.length > 0 && (
+            <p className="text-xs text-muted">
+              De los {closed.length} resets ya cerrados, <span className={held >= closed.length / 2 ? "text-good" : "text-bad"}>{held} aguantaron 24 h</span>.
+            </p>
+          )}
+          <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+            {events.map((e) => {
+              const now = latest.get(e.item_id);
+              const info = now ?? basics.get(e.item_id);
+              const minNow = now?.min_buyout ?? null;
+              return (
+                <li key={e.id}>
+                  <Link href={`/item/${e.item_id}?house=${houseId}`} className="block space-y-1.5 px-4 py-3 active:bg-surface-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="flex min-w-0 items-center gap-3">
+                        <ItemIcon src={info?.icon_url ?? null} quality={info?.quality ?? null} />
+                        <span className={`line-clamp-2 font-medium leading-snug q-${info?.quality ?? "COMMON"}`}>{name(e.item_id)}</span>
+                      </span>
+                      <div className="shrink-0 text-right font-mono text-sm" title="Mínimo antes → justo después del reset">
+                        <p className="text-gold">{formatMoney(e.new_min)}</p>
+                        <p className="font-sans text-xs text-muted">antes {formatMoney(e.prev_min)}</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted">
+                      Alguien compró <b className="text-fg">{e.units.toLocaleString("es-ES")} uds</b> por <b className="font-mono text-fg">{formatMoney(e.cost)}</b> ·
+                      precio normal {formatMoney(e.market)} (+{Math.round((e.new_min / e.market - 1) * 100)}%)
+                    </p>
+                    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                      <EventStatus e={e} />
+                      {e.status === "open" && (
+                        <span>
+                          {minNow === null ? "agotado ahora" : `mínimo ahora ${formatMoney(minNow)}`}
+                          {minNow !== null && minNow > e.market && <span className="text-good"> · si tienes, vende a {formatMoney(minNow - 1)}</span>}
+                        </span>
+                      )}
+                    </p>
+                    {history.get(e.item_id) && history.get(e.item_id)!.total > 1 && <HistoryLine h={history.get(e.item_id)!} />}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+      <div className="space-y-1 text-xs text-muted">
+        <p>
+          <b>Para qué sirve</b>: si tienes el objeto, véndelo mientras el precio está alto (1c por debajo del mínimo de ahora). Si no, no
+          compres a ese precio: espera a ver si se cae.
+        </p>
+        <p>
+          <b>Aguantando</b>: el precio sigue alto. <b>Se cayó</b>: el mínimo volvió a menos de un 10% sobre el de antes (o un 5% sobre lo
+          normal), porque otros publicaron más barato. <b>Aguantó</b>: siguió alto 24 h. Con el tiempo, este historial te dice en qué
+          objetos merece la pena resetear tú.
         </p>
       </div>
     </>

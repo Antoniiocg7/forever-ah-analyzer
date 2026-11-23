@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ALERTS, dealAlerts, digestHtml, digestKeyDue, levelingAlerts, warsawNow, watchAlerts, type DealCandidate } from "./rules";
+import { DEFAULT_ALERTS, dealAlerts, digestHtml, digestKeyDue, levelingAlerts, resetAlerts, warsawNow, watchAlerts, type DealCandidate } from "./rules";
 
 const base = "https://example.test";
 const deal = (itemId: number, depthProfit: number): DealCandidate => ({ itemId, name: `Item ${itemId}`, min: 100, market7d: 200, units: 3, cost: 300, depthProfit, soldPerDay: 10 });
@@ -67,5 +67,18 @@ describe("resumen diario", () => {
     expect(html).toContain("Día 19");
     expect(html).toContain("/item/7");
     expect(html).toContain("hace 5 h");
+  });
+});
+
+describe("resetAlerts", () => {
+  const ev = { itemId: 7, name: "Arcanite Bar", prevMin: 90000, newMin: 150000, market: 100000, units: 12, cost: 1_100_000, minNow: 149000 };
+  it("avisa de un reset grande y sugiere vender 1c por debajo", () => {
+    const [a] = resetAlerts([ev], DEFAULT_ALERTS, new Set(), "https://x");
+    expect(a.key).toBe("reset:7");
+    expect(a.html).toContain("vende a 14g 89s");
+  });
+  it("respeta el antispam y el mínimo", () => {
+    expect(resetAlerts([ev], DEFAULT_ALERTS, new Set(["reset:7"]), "https://x")).toEqual([]);
+    expect(resetAlerts([{ ...ev, cost: 100 }], DEFAULT_ALERTS, new Set(), "https://x")).toEqual([]);
   });
 });

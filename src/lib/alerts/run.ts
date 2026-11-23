@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { categorize, gameContext, investAdvice } from "../calendar";
-import { calendarEvents, dealSettings, flipCandidates, marketableItems } from "../deals-queries";
+import { calendarEvents, dealSettings, flipCandidates, latestRows, marketableItems, itemsBasic, recentResets } from "../deals-queries";
 import { pick } from "../lang";
 import { scoreDeal } from "../pricing/deals";
 import { buildPlan } from "../professions/plan";
@@ -14,6 +14,7 @@ import {
   digestHtml,
   digestKeyDue,
   levelingAlerts,
+  resetAlerts,
   watchAlerts,
   type Alert,
   type AlertSettings,
@@ -136,10 +137,29 @@ export async function runAlerts(db: SupabaseClient, now = new Date()): Promise<A
 
   const leveling = await levelingResults(house.id, house.faction, s);
 
+  // Resets de otros detectados en las últimas 2 h y que siguen en pie.
+  const fresh = (await recentResets(house.id, 2)).filter((e) => e.status === "open");
+  const freshIds = fresh.map((e) => e.item_id);
+  const [freshRows, freshItems] = await Promise.all([latestRows(house.id, freshIds), itemsBasic(freshIds)]);
+  const resets = fresh.map((e) => {
+    const it = freshRows.get(e.item_id) ?? freshItems.get(e.item_id);
+    return {
+      itemId: e.item_id,
+      name: pick(it?.name_en, it?.name_es, s.lang) ?? `#${e.item_id}`,
+      prevMin: Number(e.prev_min),
+      newMin: Number(e.new_min),
+      market: Number(e.market),
+      units: e.units,
+      cost: Number(e.cost),
+      minNow: freshRows.get(e.item_id)?.min_buyout ?? null,
+    };
+  });
+
   const alerts: Alert[] = [
     ...watchAlerts(watched, recent, PUBLIC_URL),
     ...dealAlerts(deals, s, recent, PUBLIC_URL),
     ...levelingAlerts(leveling, recent, PUBLIC_URL),
+    ...resetAlerts(resets, s, recent, PUBLIC_URL),
   ];
 
   const digestKey = digestKeyDue(now, s.dailyHour, recent);

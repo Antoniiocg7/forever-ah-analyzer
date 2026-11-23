@@ -14,6 +14,7 @@ import { formatMoney } from "@/lib/money";
 import { supabaseAdmin } from "@/lib/supabase";
 import { addWatch, removeWatch } from "@/app/alerts/actions";
 import { recipesForItem, type RecipeLink } from "@/lib/professions/queries";
+import { hoursSince, resetHistory } from "@/lib/deals-queries";
 import { dailySeries, hourlySeries, itemById, itemClassNames, latestPrice, trackedHouses } from "@/lib/queries";
 
 export default function Page(props: PageProps<"/item/[id]">) {
@@ -39,7 +40,7 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
   if (houses.length === 0) return <NoHousesNotice />;
   const house = houses.find((h) => String(h.id) === sp.house) ?? houses[0];
 
-  const [item, latest, hourly, daily, recipes, lang, classNames] = await Promise.all([
+  const [item, latest, hourly, daily, recipes, lang, classNames, resets] = await Promise.all([
     itemById(itemId),
     latestPrice(house.id, itemId),
     hourlySeries(house.id, itemId),
@@ -47,6 +48,7 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
     recipesForItem(itemId),
     nameLang(),
     itemClassNames(),
+    resetHistory(house.id, [itemId]).then((m) => m.get(itemId) ?? null),
   ]);
   const typeName = (en: string | null | undefined) => (en ? (lang === "es" ? (classNames.get(en) ?? en) : en) : null);
 
@@ -131,6 +133,24 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
       </dl>
 
       {!latest && <p className="card text-sm text-muted">Ahora mismo no hay ninguna unidad en venta en esta casa.</p>}
+
+      {resets && (
+        <section className={`card space-y-1 text-sm ${resets.last.status === "open" ? "border-gold/60" : ""}`}>
+          {resets.last.status === "open" ? (
+            <p>
+              <b className="text-gold">Reset en marcha</b>: hace {hoursSince(resets.last.detected_at)} h alguien compró{" "}
+              {resets.last.units.toLocaleString("es-ES")} uds por {formatMoney(resets.last.cost)} y el mínimo pasó de {formatMoney(resets.last.prev_min)} a{" "}
+              {formatMoney(resets.last.new_min)}. Si tienes, es buen momento para vender; si no, no compres caro: puede caerse.
+            </p>
+          ) : (
+            <p className="text-muted">Último reset de otro jugador: {new Date(resets.last.detected_at).toLocaleDateString("es-ES")}, {resets.last.status === "held" ? "aguantó 24 h" : "se cayó"}.</p>
+          )}
+          <p className="text-xs text-muted">
+            Resets de otros en este objeto: {resets.total} · aguantaron {resets.held} · se cayeron {resets.failed}
+            {resets.avgHoursToFail !== null && ` (duraron ≈${Math.round(resets.avgHoursToFail)} h)`}
+          </p>
+        </section>
+      )}
 
       <PriceChart hourly={hourly} daily={daily} />
 

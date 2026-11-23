@@ -65,6 +65,10 @@ const TERMS: { term: string; text: ReactNode }[] = [
     term: "Resetear un mercado",
     text: "Comprar todas las unidades baratas de un objeto hasta el siguiente escalón de precio (el “muro”) y volver a publicarlas más caras. Funciona con objetos que se venden bien y que nadie repone enseguida; si se repone rápido, te quedas con el stock.",
   },
+  {
+    term: "Reset de otro jugador",
+    text: "Se detecta cuando, de una hora a otra, alguien compra todo lo barato de un objeto y el mínimo salta más de un 25% (y más de un 15% sobre su precio normal). Si tienes ese objeto, es momento de vender. Se sigue durante 24 h: “aguantó” o “se cayó”, y con ese historial sabes en qué objetos merece la pena resetear tú.",
+  },
   { term: "Reposición", text: "ESTIMACIÓN de unidades nuevas que se publican al día (incluye las que se cancelan y se vuelven a poner). Si se repone tanto como se vende, un reset no aguanta." },
   { term: "Profundidad", text: "Cuántas unidades puedes comprar antes de que el precio deje de ser una ganga (≤ 85% de la mediana)." },
   {
