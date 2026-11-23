@@ -77,8 +77,23 @@ El resumen diario, el borrado de datos horarios de más de 7 días y de diarios 
 | `pnpm sync-skills` | Nivel de cada receta para el planificador: oficial (planos, patrones) o estimado (después de `sync-recipes`) |
 | `pnpm telegram-setup` | Conecta tu chat de Telegram a las alertas |
 | `pnpm sync-names` | Nombres en español de objetos y tipos de objeto |
+| `pnpm addon-sync` | Sube tus ventas, compras, oro e inventario reales desde el addon AHledger (Mi oro) |
 | `pnpm test` | Tests (Vitest) |
 | `pnpm typecheck` / `pnpm lint` | Comprobaciones |
+
+## Datos reales del jugador (Fase 6)
+
+En vez de un addon propio se leen los datos guardados del addon **AHledger** (de terceros; solo se leen tus datos, no se usa su
+código), que ya apunta publicaciones, ventas, compras, caducadas y cancelaciones (al recoger el correo), el oro y las bolsas y el banco.
+
+1. Juega con AHledger activado. Al salir del juego (o con `/reload`) WoW escribe
+   `_forever_/WTF/Account/<cuenta>/SavedVariables/AHledger.lua`.
+2. `pnpm addon-sync` lo encuentra solo (en `/Applications` o en un disco externo de `/Volumes`) y lo sube a Supabase.
+   Para otra ruta: `pnpm addon-sync "<ruta>"` o `AHLEDGER_FILE` en `.env.local`.
+3. Desde otro equipo, en **Mi oro** se puede elegir el archivo: se lee en el navegador y solo se envían el inventario y el libro.
+
+**Mi oro** es privado: en la web publicada pide `ADMIN_TOKEN` y guarda una cookie de sesión firmada.
+Versión del cliente de Forever comprobada: 1.60.1 (`## Interface: 16001`).
 
 ## Pendiente de confirmar
 

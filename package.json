@@ -14,7 +14,8 @@
     "sync-recipes": "tsx scripts/sync-recipes.ts",
     "sync-skills": "tsx scripts/sync-skills.ts",
     "sync-names": "tsx scripts/sync-names.ts",
-    "telegram-setup": "tsx scripts/telegram-setup.ts"
+    "telegram-setup": "tsx scripts/telegram-setup.ts",
+    "addon-sync": "tsx scripts/addon-sync.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",

@@ -30,6 +30,12 @@ const SECTIONS: { id: string; title: string; href?: string; text: ReactNode }[] 
     text: "Tu lista de piezas de equipo para el paladín: precio de cada una, su mínimo del mes, hasta cuánto pagarías y si conviene comprarla ya o esperar.",
   },
   {
+    id: "mi-oro",
+    title: "Mi oro",
+    href: "/cuenta",
+    text: "Tus ventas y compras REALES (no estimadas), tu oro y el valor de tu inventario, leídos del addon AHledger con pnpm addon-sync. Te dice qué objetos te dejan dinero y si vendes por debajo del precio normal. Privado: pide la contraseña.",
+  },
+  {
     id: "ajustes",
     title: "Ajustes",
     href: "/admin/houses",
