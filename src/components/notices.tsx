@@ -19,7 +19,7 @@ export function NoHousesNotice() {
       <p className="text-muted">
         Ejecuta <code>pnpm discover</code> y marca tu casa de Alianza PvP y la de Blackwater PvP en{" "}
         <Link href="/admin/houses" className="text-gold underline">
-          Casas
+          Ajustes → Casas de subastas
         </Link>
         . Después, <code>pnpm ingest</code> descarga los precios.
       </p>

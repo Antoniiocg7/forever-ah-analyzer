@@ -12,7 +12,9 @@ const LABELS = { en: "English", es: "Español" } as const;
 export function LangToggleView({ lang }: { lang: "en" | "es" | null }) {
   return (
     <form action={setLang} className="flex items-center gap-1.5" aria-label="Idioma de los nombres de objetos">
-      <span className="hidden text-xs text-muted sm:inline">Nombres:</span>
+      <span className="text-xs text-muted" title="Idioma de los nombres de objetos, recetas y profesiones (la web siempre está en español)">
+        Nombres<span className="hidden sm:inline"> de objetos</span>
+      </span>
       <div className="flex overflow-hidden rounded-full border border-gold/60 text-xs font-medium">
         {(["en", "es"] as const).map((l) => {
           const active = lang === l;

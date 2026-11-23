@@ -20,9 +20,12 @@ export function PriceChart({ hourly, daily }: { hourly: PricePoint[]; daily: Pri
   return (
     <div className="card space-y-3">
       <div className="flex items-center justify-between">
-        <div className="flex gap-3 text-xs">
-          <span className="text-gold">■ Mínimo</span>
-          <span className="text-[#5b9cf0]">■ Mercado</span>
+        <div>
+          <p className="text-sm font-medium">Historial de precios</p>
+          <div className="flex gap-3 text-xs">
+            <span className="text-gold" title="El precio por unidad más barato en cada momento">■ Más barato</span>
+            <span className="text-[#5b9cf0]" title="Media del 15% de unidades más baratas">■ Mercado</span>
+          </div>
         </div>
         <div className="flex rounded-lg border border-line text-sm">
           {(["7d", "30d"] as const).map((r) => (
@@ -31,6 +34,7 @@ export function PriceChart({ hourly, daily }: { hourly: PricePoint[]; daily: Pri
               onClick={() => setRange(r)}
               className={`min-h-9 px-3 ${range === r ? "bg-surface-2 text-fg" : "text-muted"}`}
               aria-pressed={range === r}
+              title={r === "7d" ? "Última semana, hora a hora" : "Último mes, un punto por día"}
             >
               {r === "7d" ? "7 días" : "30 días"}
             </button>
@@ -39,7 +43,7 @@ export function PriceChart({ hourly, daily }: { hourly: PricePoint[]; daily: Pri
       </div>
 
       {data.length < 2 ? (
-        <p className="py-10 text-center text-sm text-muted">Hacen falta al menos dos {range === "7d" ? "snapshots" : "días"} para dibujar la gráfica.</p>
+        <p className="py-10 text-center text-sm text-muted">Hacen falta al menos dos {range === "7d" ? "descargas horarias" : "días de datos"} para dibujar la gráfica.</p>
       ) : (
         <>
           <div className="h-52">
@@ -49,7 +53,7 @@ export function PriceChart({ hourly, daily }: { hourly: PricePoint[]; daily: Pri
                 <XAxis dataKey="t" type="number" scale="time" domain={["dataMin", "dataMax"]} tickFormatter={fmtTick(range)} minTickGap={40} {...axis} />
                 <YAxis tickFormatter={(v: number) => formatMoney(v)} width={64} domain={["auto", "auto"]} {...axis} />
                 <Tooltip contentStyle={tooltipStyle} labelFormatter={(t) => fmtFull(Number(t))} formatter={(v, name) => [v == null ? "agotado" : formatMoney(Number(v)), name]} />
-                <Line name="Mínimo" dataKey="min" stroke="#e0b354" dot={data.length < 30} strokeWidth={2} isAnimationActive={false} connectNulls={false} />
+                <Line name="Más barato" dataKey="min" stroke="#e0b354" dot={data.length < 30} strokeWidth={2} isAnimationActive={false} connectNulls={false} />
                 <Line name="Mercado" dataKey="market" stroke="#5b9cf0" dot={data.length < 30} strokeWidth={2} isAnimationActive={false} connectNulls={false} />
               </LineChart>
             </ResponsiveContainer>

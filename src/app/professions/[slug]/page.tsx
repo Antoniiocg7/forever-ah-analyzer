@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { Hint } from "@/components/Hint";
 import { HouseTabs } from "@/components/HouseTabs";
 import { ItemIcon } from "@/components/ItemIcon";
 import { Loading, NoHousesNotice, NoRecipesNotice, SetupNotice } from "@/components/notices";
@@ -17,6 +18,12 @@ import { saveRecipeSkill } from "../actions";
 
 const SORTS = { profit: "Beneficio", margin: "Margen", cost: "Coste", name: "Nombre" } as const;
 type Sort = keyof typeof SORTS;
+const SORT_TIPS: Record<Sort, string> = {
+  profit: "Las que más oro dejan por cada fabricación",
+  margin: "Las que más ganan en proporción a lo que cuestan (rentabilidad %)",
+  cost: "Las más baratas de fabricar primero",
+  name: "Por orden alfabético",
+};
 
 const LIQUIDITY: Record<Liquidity, { label: string; className: string } | null> = {
   high: { label: "mucho mercado", className: "border-good/60 text-good" },
@@ -115,13 +122,19 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
       <div className="flex items-start justify-between gap-3">
         <div>
         <h1 className="text-xl font-semibold">{pick(recipes[0].profession, recipes[0].profession_es, lang)}</h1>
+        <p className="mt-1 text-sm text-muted">Coste de fabricar cada receta y lo que ganas vendiendo el resultado.</p>
         <p className="text-xs text-muted">
           {recipes.length.toLocaleString("es-ES")} recetas · {profitable} con beneficio ahora
           {updatedAt && ` · precios de ${new Date(updatedAt).toLocaleString("es-ES", { timeZone: "Europe/Warsaw", dateStyle: "short", timeStyle: "short" })}`}
         </p>
         </div>
-        <Link href={`/professions/${slug}/plan?house=${house.id}`} className="btn shrink-0 text-sm">
+        <Link
+          href={`/professions/${slug}/plan?house=${house.id}`}
+          className="btn shrink-0 flex-col text-sm leading-tight"
+          title="Calcula la forma más barata de subir de tu nivel actual al que quieras, con la lista de la compra"
+        >
           Planificar subida
+          <span className="text-[11px] font-normal opacity-80">ruta más barata</span>
         </Link>
       </div>
 
@@ -129,22 +142,38 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
         <input type="hidden" name="house" value={house.id} />
         <input type="hidden" name="sort" value={sort} />
         {reliable && <input type="hidden" name="fiables" value="1" />}
-        <input className="input" type="search" name="q" defaultValue={q} placeholder="Buscar receta" enterKeyHint="search" />
+        <input className="input" type="search" name="q" defaultValue={q} placeholder="Nombre de la receta" enterKeyHint="search" aria-label="Buscar receta" />
         <button className="btn shrink-0">Buscar</button>
       </form>
 
       <HouseTabs houses={houses} current={house.id} hrefFor={(id) => href({ house: id })} />
 
-      <div className="flex gap-2 overflow-x-auto text-sm">
-        <Link href={href({ fiables: !reliable })} className={chip(reliable)} aria-pressed={reliable}>
-          Solo rentables con mercado
+      <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 text-sm">
+        <Link
+          href={href({ fiables: !reliable })}
+          className={chip(reliable)}
+          aria-pressed={reliable}
+          title="Oculta las recetas que dan pérdidas y las que fabrican algo que casi no se vende"
+        >
+          {reliable ? "✓ " : ""}Solo rentables y que se venden
         </Link>
+        <span className="shrink-0 pl-1 text-xs text-muted">Ordenar por</span>
         {(Object.keys(SORTS) as Sort[]).map((s) => (
-          <Link key={s} href={href({ sort: s })} className={chip(s === sort)}>
+          <Link key={s} href={href({ sort: s })} className={chip(s === sort)} title={SORT_TIPS[s]}>
             {SORTS[s]}
           </Link>
         ))}
       </div>
+      <p className="flex items-center gap-1 text-xs text-muted">
+        Toca una receta para ver sus materiales
+        <Hint label="Cómo leer cada receta">
+          <b>Derecha arriba</b>: lo que ganas por fabricarla y venderla (en verde si ganas, en rojo si pierdes) y el margen en %.
+          <br />
+          <b>Derecha abajo</b>: lo que cuestan los materiales.
+          <br />
+          <b>Izquierda</b>: si el producto se vende mucho o poco, ventas al día y el nivel de profesión que pide la receta.
+        </Hint>
+      </p>
 
       {typeof sp.msg === "string" && MESSAGES[sp.msg] && (
         <p className={`card text-sm ${MESSAGES[sp.msg].ok ? "text-good" : "text-bad"}`}>{MESSAGES[sp.msg].text}</p>
@@ -253,7 +282,7 @@ function RecipeItem({
             </p>
           </div>
         </div>
-        <div className="shrink-0 text-right font-mono text-sm">
+        <div className="shrink-0 text-right font-mono text-sm" title="Arriba: lo que ganas por fabricación (margen %). Abajo: coste de los materiales.">
           <p className={profitClass}>
             {calc.profit === null ? "—" : `${calc.profit > 0 ? "+" : ""}${formatMoney(calc.profit)}`}
             {calc.margin !== null && <span className="text-xs"> ({Math.round(calc.margin * 100)}%)</span>}
@@ -351,7 +380,7 @@ function SkillEditor({
   return (
     <details className="border-t border-line pt-2 text-xs">
       <summary className="cursor-pointer py-1 text-muted">
-        Nivel:{" "}
+        Niveles de color:{" "}
         {colors ? (
           <>
             {COLOR_FIELDS.map((f, i) => (
@@ -360,16 +389,21 @@ function SkillEditor({
                 {i < 3 ? " · " : ""}
               </span>
             ))}{" "}
-            ({SOURCE[recipe.skill_source ?? "estimate"]}) · corregir
+            ({SOURCE[recipe.skill_source ?? "estimate"]}) · <span className="text-gold">✎ corregir</span>
           </>
         ) : (
-          "desconocido · añadir"
+          <>
+            desconocido · <span className="text-gold">✎ añadir</span>
+          </>
         )}
       </summary>
       <form action={saveRecipeSkill} className="mt-2 space-y-2">
         <input type="hidden" name="recipeId" value={recipe.id} />
         <input type="hidden" name="back" value={back} />
-        <p className="text-muted">Pon los niveles que ves en el juego: desde cuándo es naranja, amarillo, verde y gris.</p>
+        <p className="text-muted">
+          Si en el juego no coincide, pon el nivel de profesión a partir del cual la receta se ve naranja, amarillo, verde y gris. El
+          planificador usará tus números.
+        </p>
         <div className="grid grid-cols-4 gap-2">
           {COLOR_FIELDS.map((f) => (
             <label key={f.key}>
@@ -380,7 +414,7 @@ function SkillEditor({
         </div>
         {needToken && <input name="token" type="password" required placeholder="Contraseña" className="input" autoComplete="current-password" aria-label="Contraseña de administración" />}
         <div className="flex gap-2">
-          <button className="btn flex-1">Guardar</button>
+          <button className="btn flex-1">Guardar niveles</button>
           {recipe.skill_source === "manual" && (
             <button name="reset" value="1" formNoValidate className="min-h-11 rounded-lg border border-line px-3 text-muted">
               Quitar corrección

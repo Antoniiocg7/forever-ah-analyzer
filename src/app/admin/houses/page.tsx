@@ -2,6 +2,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { Loading, SetupNotice } from "@/components/notices";
+import { PageIntro } from "@/components/PageIntro";
 import { adminTokenRequired } from "@/lib/admin";
 import { isConfigured } from "@/lib/env";
 import { formatMoney } from "@/lib/money";
@@ -25,15 +26,24 @@ const COLUMNS = [
 export default function Page({ searchParams }: PageProps<"/admin/houses">) {
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold">Casas de subastas</h1>
-        <p className="mt-1 text-sm text-muted">
-          Qué casas se descargan cada hora. Solo necesitas tocar esto una vez. ·{" "}
-          <Link href="/alerts" className="text-gold underline">
-            Alertas de Telegram
-          </Link>
-        </p>
-      </div>
+      <PageIntro
+        title="Ajustes"
+        summary="Qué casas de subastas se siguen y los avisos al móvil. Normalmente solo se toca una vez."
+      />
+      <Link href="/alerts" className="card flex items-center justify-between gap-3 active:bg-surface-2">
+        <span>
+          <span className="block font-medium">Alertas de Telegram</span>
+          <span className="block text-sm text-muted">Avisos al móvil de chollos, precios que vigilas y buenos momentos para subir profesiones.</span>
+        </span>
+        <span className="shrink-0 text-gold" aria-hidden>
+          →
+        </span>
+      </Link>
+      <h2 className="pt-2 font-medium">Casas de subastas</h2>
+      <p className="-mt-2 text-sm text-muted">
+        Para cada grupo verás el precio de unos materiales comunes en cada casa. Compáralos con lo que ves en tu subasta del juego y pulsa
+        “Esta es mi…” en la que coincida. Las marcadas se descargan cada hora.
+      </p>
       <Suspense fallback={<Loading />}>
         <Houses searchParams={searchParams} />
       </Suspense>
@@ -183,9 +193,10 @@ function GroupCard({ group, price, needToken }: { group: Group; price: Map<strin
                 <input name="token" type="password" required placeholder="Contraseña" className="input min-w-0" autoComplete="current-password" aria-label="Contraseña de administración" />
               )}
               <button
+                title={isMarked ? "Dejar de descargar esta casa" : `Marcar esta casa como tu ${c.title} y descargar sus precios cada hora`}
                 className={`min-h-11 w-full rounded-lg border px-3 text-sm ${isMarked ? "border-gold text-gold" : "border-line text-fg active:bg-surface-2"}`}
               >
-                {isMarked ? `✓ Tu ${c.title} · quitar` : `Es mi ${c.title}`}
+                {isMarked ? `✓ Sigues esta (${c.title}) · dejar de seguir` : `Esta es mi ${c.title}`}
               </button>
             </form>
           );

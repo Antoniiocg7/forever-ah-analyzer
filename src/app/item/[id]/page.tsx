@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { Hint } from "@/components/Hint";
 import { HouseTabs } from "@/components/HouseTabs";
 import { ItemIcon } from "@/components/ItemIcon";
 import { Loading, NoHousesNotice, SetupNotice } from "@/components/notices";
@@ -54,14 +55,31 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
   const soldPerDay =
     latest?.sold_per_day ?? (soldDays.length ? Math.round(soldDays.reduce((s, d) => s + (d.sold ?? 0), 0) / soldDays.length) : null);
 
-  const stats: { label: string; value: string }[] = [
-    { label: "Mínimo ahora", value: formatMoney(latest?.min_buyout) },
-    { label: "Mercado ahora", value: formatMoney(latest?.p15_market) },
-    { label: "Mediana 7 días", value: formatMoney(latest?.market_7d) },
-    { label: "En venta", value: latest ? `${latest.qty.toLocaleString("es-ES")} uds · ${latest.num_auctions} subastas` : "—" },
-    { label: "Ventas/día (est.)", value: soldPerDay === null ? "sin datos aún" : `≈ ${soldPerDay.toLocaleString("es-ES")}` },
+  const stats: { label: string; value: string; hint: string }[] = [
+    { label: "Más barato ahora", value: formatMoney(latest?.min_buyout), hint: "Precio por unidad de la subasta más barata en este momento: lo que pagarías si compras ya." },
     {
-      label: "Vendedor",
+      label: "Precio de mercado",
+      value: formatMoney(latest?.p15_market),
+      hint: "Media del 15% de unidades más baratas. Más fiable que el mínimo, que puede ser una sola subasta suelta.",
+    },
+    {
+      label: "Precio normal (7 días)",
+      value: formatMoney(latest?.market_7d),
+      hint: "Mediana de la última semana. Si “más barato ahora” está muy por debajo, es buen momento para comprar; si está por encima, para vender.",
+    },
+    {
+      label: "En venta",
+      value: latest ? `${latest.qty.toLocaleString("es-ES")} uds · ${latest.num_auctions} subastas` : "—",
+      hint: "Unidades publicadas ahora y en cuántas subastas están repartidas. Mucho stock y pocas ventas = cuesta vender.",
+    },
+    {
+      label: "Vendidos al día",
+      value: soldPerDay === null ? "sin datos aún" : `≈ ${soldPerDay.toLocaleString("es-ES")}`,
+      hint: "Estimación: subastas que desaparecen antes de caducar. Blizzard no publica las ventas reales.",
+    },
+    {
+      label: "Vendedor (NPC)",
+      hint: "“Paga” es lo que te da un vendedor del juego por cada unidad. “Vende a” es lo que cuesta comprárselo a él (si lo vende).",
       value: [item?.vendor_sold && item.vendor_buy ? `vende a ${formatMoney(item.vendor_buy)}` : null, item?.vendor_sell ? `paga ${formatMoney(item.vendor_sell)}` : null]
         .filter(Boolean)
         .join(" · ") || "—",
@@ -86,7 +104,7 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
           rel="noopener noreferrer"
           className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line px-3 text-sm text-muted hover:text-fg"
         >
-          Ver en Wowhead ↗
+          Ver en Wowhead (dónde sale, para qué sirve) ↗
         </a>
       </div>
 
@@ -95,7 +113,10 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
       <dl className="grid grid-cols-2 gap-3">
         {stats.map((s) => (
           <div key={s.label} className="card">
-            <dt className="text-xs text-muted">{s.label}</dt>
+            <dt className="flex items-center gap-1 text-xs text-muted">
+              {s.label}
+              <Hint label={`Qué es “${s.label}”`}>{s.hint}</Hint>
+            </dt>
             <dd className="mt-1 font-mono text-base">{s.value}</dd>
           </div>
         ))}
@@ -107,8 +128,8 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
 
       <WatchForm itemId={itemId} back={`/item/${itemId}?house=${house.id}`} msg={typeof sp.msg === "string" ? sp.msg : undefined} current={latest?.min_buyout ?? null} />
 
-      <RecipeList title="Se fabrica con" recipes={recipes.makes} houseId={house.id} lang={lang} />
-      <RecipeList title="Se usa en" recipes={recipes.uses} houseId={house.id} lang={lang} showQty />
+      <RecipeList title="Recetas que lo fabrican" recipes={recipes.makes} houseId={house.id} lang={lang} />
+      <RecipeList title="Recetas que lo usan como material" recipes={recipes.uses} houseId={house.id} lang={lang} showQty />
 
       <p className="text-xs text-muted">
         “Mercado” es la media del 15% de unidades más baratas. Las ventas son una estimación por diferencia entre snapshots: la
@@ -160,6 +181,7 @@ async function WatchForm({ itemId, back, msg, current }: { itemId: number; back:
   return (
     <section className="card space-y-2 text-sm">
       <h2 className="font-medium">Avísame por Telegram</h2>
+      <p className="text-xs text-muted">Te llega un mensaje al móvil cuando el más barato baje (o suba) del precio que pongas. Se revisa cada hora.</p>
       {m && <p className={m.ok ? "text-good" : "text-bad"}>{m.text}</p>}
       {data && (
         <form action={removeWatch} className="flex items-center justify-between gap-2">
@@ -185,13 +207,13 @@ async function WatchForm({ itemId, back, msg, current }: { itemId: number; back:
           placeholder={current ? `p. ej. ${formatMoney(Math.round(current * 0.85))}` : "p. ej. 1g 20s"}
           defaultValue={data ? formatMoney(Number(data.target_price)) : ""}
           required
-          aria-label="Precio"
+          aria-label="Precio por unidad (p. ej. 1g 20s)"
         />
         {needToken && <input name="token" type="password" required placeholder="Contraseña" className="input col-span-2" aria-label="Contraseña de administración" />}
         <button className="btn col-span-2">{data ? "Cambiar aviso" : "Guardar aviso"}</button>
       </form>
       <Link href="/alerts" className="inline-block text-xs text-gold underline">
-        Configurar alertas
+        Ver todas las alertas
       </Link>
     </section>
   );

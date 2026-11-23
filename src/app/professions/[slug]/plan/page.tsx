@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { Hint } from "@/components/Hint";
 import { HouseTabs } from "@/components/HouseTabs";
 import { ItemIcon } from "@/components/ItemIcon";
 import { Loading, NoHousesNotice, NoRecipesNotice, SetupNotice } from "@/components/notices";
+import { PageIntro } from "@/components/PageIntro";
 import { isConfigured } from "@/lib/env";
 import { pick } from "@/lib/lang";
 import { nameLang } from "@/lib/lang-server";
@@ -76,10 +78,16 @@ async function Planner({ params, searchParams }: PageProps<"/professions/[slug]/
       <Link href={`/professions/${slug}?house=${house.id}`} className="text-sm text-muted">
         ← {profession}
       </Link>
-      <div>
-        <h1 className="text-xl font-semibold">Subir {profession}</h1>
-        <p className="mt-1 text-sm text-muted">La ruta más barata con los precios de ahora, contando lo que recuperas vendiendo lo que fabricas.</p>
-      </div>
+      <PageIntro
+        title={`Subir ${profession}`}
+        summary="Calcula qué recetas fabricar, en qué orden y qué comprar para subir de nivel gastando lo mínimo con los precios de ahora."
+        steps={[
+          "Pon tu nivel actual de la profesión y el nivel al que quieres llegar, y pulsa “Calcular la ruta más barata”.",
+          "Arriba verás el coste total y si ahora es buen momento (más barato que una semana normal) o conviene esperar.",
+          "“Lista de la compra”: lo que tienes que comprar en la subasta o al vendedor. “Fabricar tú”: materiales intermedios que te sale más barato hacer (p. ej. barras).",
+          "“Qué fabricar”: las recetas en orden, con los niveles en los que usar cada una y cuántas veces.",
+        ]}
+      />
 
       {GATHERING.includes(slug) && (
         <p className="card text-sm text-muted">
@@ -93,26 +101,32 @@ async function Planner({ params, searchParams }: PageProps<"/professions/[slug]/
       <form action={`/professions/${slug}/plan`} className="card grid grid-cols-2 gap-3">
         <input type="hidden" name="house" value={house.id} />
         <label className="text-sm">
-          <span className="text-muted">Tu nivel</span>
+          <span className="text-muted">Tu nivel ahora</span>
           <input className="input mt-1" type="number" name="from" min={1} max={MAX_SKILL - 1} defaultValue={from} inputMode="numeric" required />
         </label>
         <label className="text-sm">
-          <span className="text-muted">Objetivo</span>
+          <span className="text-muted">Quiero llegar a</span>
           <input className="input mt-1" type="number" name="to" min={2} max={MAX_SKILL} defaultValue={to} inputMode="numeric" required />
         </label>
         <label className="col-span-2 flex items-center gap-2 text-sm text-muted">
           <input type="checkbox" name="planos" value="todos" defaultChecked={includeUnlisted} className="h-4 w-4 accent-[#e0b354]" />
-          Incluir recetas de planos que ahora no están en la subasta (si ya las tienes)
+          <span>
+            Usar también recetas de planos que ahora no se venden en la subasta{" "}
+            <span className="text-xs">(márcalo si ya las tienes aprendidas)</span>
+          </span>
         </label>
         <label className="col-span-2 flex items-center gap-2 text-sm text-muted">
           <input type="checkbox" name="vender" value="subasta" defaultChecked={sellOnAh} className="h-4 w-4 accent-[#e0b354]" />
-          Contar lo que vendería en la subasta (optimista: si no, solo lo que paga el vendedor)
+          <span>
+            Descontar lo que sacaría vendiendo lo fabricado en la subasta{" "}
+            <span className="text-xs">(optimista; si no, solo cuenta lo que paga el vendedor, que es seguro)</span>
+          </span>
         </label>
-        <button className="btn col-span-2">Calcular ruta</button>
+        <button className="btn col-span-2">Calcular la ruta más barata</button>
       </form>
 
       {!plan ? (
-        <p className="text-sm text-muted">Pon tu nivel actual y el objetivo.</p>
+        <p className="text-sm text-muted">Pon tu nivel actual y al que quieres llegar, y pulsa el botón.</p>
       ) : plan.route.steps.length === 0 ? (
         <p className="card text-sm text-bad">
           No hay ninguna receta con precio que dé puntos en el nivel {from}. Puede faltar el nivel de alguna receta o el precio de sus
@@ -123,7 +137,8 @@ async function Planner({ params, searchParams }: PageProps<"/professions/[slug]/
           <section className="card space-y-2">
             <div className="flex items-baseline justify-between gap-3">
               <h2 className="font-medium">
-                {from} → {plan.route.reached}
+                Del {from} al {plan.route.reached}
+                <span className="block text-xs font-normal text-muted">coste total estimado</span>
               </h2>
               <p className="font-mono text-lg text-gold">{formatMoney(plan.route.cost)}</p>
             </div>
@@ -131,7 +146,7 @@ async function Planner({ params, searchParams }: PageProps<"/professions/[slug]/
               <Row label="Materiales" value={formatMoney(plan.materials)} />
               <Row label={sellOnAh ? "Recuperas vendiendo (est.)" : "Recuperas vendiendo al vendedor"} value={`− ${formatMoney(plan.resale)}`} />
               {plan.plansToBuy.length > 0 && <Row label="Planos a comprar" value={formatMoney(plan.plansToBuy.reduce((s, p) => s + p.price, 0))} />}
-              <Row label="Fabricaciones" value={`≈ ${Math.ceil(plan.route.crafts)}`} />
+              <Row label="Veces que fabricarás" value={`≈ ${Math.ceil(plan.route.crafts)}`} />
             </dl>
             {plan.route.reached < to && (
               <p className="text-sm text-bad">
@@ -150,7 +165,14 @@ async function Planner({ params, searchParams }: PageProps<"/professions/[slug]/
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-sm font-medium text-muted">Lista de la compra</h2>
+            <h2 className="flex items-center gap-1 text-sm font-medium text-muted">
+              Lista de la compra
+              <Hint label="Cómo usar la lista de la compra">
+                Todo lo que tienes que comprar para la ruta entera. Debajo de cada línea: dónde comprarlo (subasta o vendedor) y el precio por
+                unidad. <span className="text-good">Barato ahora</span> = buen momento para comprarlo;{" "}
+                <span className="text-bad">caro ahora</span> = si puedes, espera o recógelo tú. Si ya lo tienes en las bolsas, no lo compres.
+              </Hint>
+            </h2>
             <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface text-sm">
               {plan.plansToBuy.map((p) => (
                 <li key={`plan-${p.recipeId}`} className="flex items-center justify-between gap-3 px-4 py-2.5">
@@ -214,7 +236,14 @@ async function Planner({ params, searchParams }: PageProps<"/professions/[slug]/
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-sm font-medium text-muted">Pasos</h2>
+            <h2 className="flex items-center gap-1 text-sm font-medium text-muted">
+              Qué fabricar, en orden
+              <Hint label="Cómo leer los pasos">
+                <b>125–150</b>: usa esa receta desde el nivel 125 hasta el 150. <b>≈ N veces</b>: cuántas fabricaciones hacen falta de media
+                (las amarillas y verdes no siempre suben). El color del nombre es el color de la receta al empezar el tramo. A la derecha, lo
+                que cuesta ese tramo.
+              </Hint>
+            </h2>
             <ol className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface text-sm">
               {plan.route.steps.map((st) => {
                 const c = plan.byId.get(st.recipeId)!;

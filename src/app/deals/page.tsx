@@ -2,9 +2,11 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { GameContextBanner } from "@/components/GameContextBanner";
+import { Hint } from "@/components/Hint";
 import { HouseTabs } from "@/components/HouseTabs";
 import { ItemIcon } from "@/components/ItemIcon";
 import { Loading, NoHousesNotice, SetupNotice } from "@/components/notices";
+import { PageIntro } from "@/components/PageIntro";
 import { CATEGORY_LABEL, categorize, gameContext, investAdvice as adviceFor, type Advice, type Category } from "@/lib/calendar";
 import { calendarEvents, dealSettings, flipCandidates, marketableItems, vendorFlips } from "@/lib/deals-queries";
 import { isConfigured } from "@/lib/env";
@@ -16,21 +18,41 @@ import { scoreDeal } from "@/lib/pricing/deals";
 import { trackedHouses } from "@/lib/queries";
 import type { LatestPriceRow } from "@/lib/supabase";
 
-const TABS = { flip: "Revender", vendor: "Vender al vendedor", invest: "Invertir" } as const;
+const TABS = {
+  flip: {
+    label: "Comprar y revender",
+    desc: "Objetos que ahora están por debajo de su precio normal. Los compras y los vuelves a publicar más caros en la subasta.",
+  },
+  vendor: {
+    label: "Comprar y vender al NPC",
+    desc: "Objetos que en la subasta cuestan menos de lo que te paga un vendedor del juego. Ganancia segura, sin comisión ni depósito.",
+  },
+  invest: {
+    label: "Guardar para raids",
+    desc: "Consumibles y materiales de raid que suelen subir antes de que abran las raids. Compra barato ahora y vende cerca de la apertura.",
+  },
+} as const;
 type Tab = keyof typeof TABS;
 
 export default function Page({ searchParams }: PageProps<"/deals">) {
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold">Chollos</h1>
-        <p className="mt-1 text-sm text-muted">
-          Qué comprar ahora para ganar oro. Las compras se hacen a mano en el juego.{" "}
-          <Link href="/alerts" className="text-gold underline">
-            Alertas de Telegram
-          </Link>
-        </p>
-      </div>
+      <PageIntro
+        title="Chollos"
+        summary="Qué comprar ahora para ganar oro. Las compras las haces tú a mano en el juego."
+        steps={[
+          "Elige el tipo de chollo en las pestañas: revender, vender al NPC o guardar para raids.",
+          "La cifra verde es lo que ganarías en total; debajo, cuánto más barato está que su precio normal.",
+          "Toca un objeto para ver su historial antes de comprar: si el precio lleva días bajando, puede seguir bajando.",
+          <>
+            ¿No quieres estar mirando? Activa las{" "}
+            <Link href="/alerts" className="text-gold underline">
+              alertas de Telegram
+            </Link>{" "}
+            y te avisa cuando aparezca un chollo.
+          </>,
+        ]}
+      />
       <Suspense>
         <GameContextBanner />
       </Suspense>
@@ -57,11 +79,12 @@ async function Deals({ searchParams }: Pick<PageProps<"/deals">, "searchParams">
       <HouseTabs houses={houses} current={house.id} hrefFor={(id) => href({ house: id })} />
       <div className="-mx-4 flex gap-2 overflow-x-auto border-b border-line px-4 pb-3 text-sm">
         {(Object.keys(TABS) as Tab[]).map((t) => (
-          <Link key={t} href={href({ tab: t })} className={chip(t === tab)}>
-            {TABS[t]}
+          <Link key={t} href={href({ tab: t })} className={chip(t === tab)} title={TABS[t].desc} aria-current={t === tab ? "page" : undefined}>
+            {TABS[t].label}
           </Link>
         ))}
       </div>
+      <p className="text-sm text-muted">{TABS[tab].desc}</p>
       {tab === "flip" && <FlipList houseId={house.id} faction={house.faction} />}
       {tab === "vendor" && <VendorList houseId={house.id} />}
       {tab === "invest" && <InvestList houseId={house.id} />}
@@ -89,6 +112,16 @@ async function FlipList({ houseId, faction }: { houseId: number; faction: string
   return (
     <>
       {!s.cutConfirmed && <p className="card text-sm text-bad">La comisión de esta casa está sin confirmar: se usa un 5% provisional.</p>}
+      <p className="flex items-center gap-1 text-xs text-muted">
+        Ordenados por lo que ganas en total
+        <Hint label="Cómo leer cada chollo">
+          <b>Compra X uds por Y</b>: unidades que están baratas (≤ 85% de su precio normal) y lo que cuestan todas juntas.
+          <br />
+          <b>Revende a</b>: su precio normal (mediana de 7 días). <b>/ud</b>: lo que ganas por unidad tras la comisión.
+          <br />
+          <b>Días en venderlo todo</b>: según lo que se vende al día; si son muchos, compra menos.
+        </Hint>
+      </p>
       {rows.length === 0 ? (
         <p className="card text-sm text-muted">
           Ahora mismo nada cumple las condiciones: al menos {formatMoney(s.minMarket)} de mercado, {s.minSoldPerDay} ventas al día
@@ -102,9 +135,12 @@ async function FlipList({ houseId, faction }: { houseId: number; faction: string
               <Link href={`/item/${r.item_id}?house=${houseId}`} className="block space-y-1 px-4 py-3 active:bg-surface-2">
                 <div className="flex items-center justify-between gap-3">
                   <ItemTitle row={r} lang={lang} />
-                  <div className="shrink-0 text-right font-mono text-sm">
-                    <p className="text-good">+{formatMoney(deal.depthProfit)}</p>
-                    <p className="text-xs text-muted">−{Math.round(deal.discount * 100)}%</p>
+                  <div className="shrink-0 text-right font-mono text-sm" title="Ganancia total si compras todas las unidades baratas y las revendes a su precio normal">
+                    <p className="text-good">
+                      +{formatMoney(deal.depthProfit)}
+                      <span className="font-sans text-xs text-muted"> ganas</span>
+                    </p>
+                    <p className="font-sans text-xs text-muted">{Math.round(deal.discount * 100)}% más barato</p>
                   </div>
                 </div>
                 <p className="text-xs text-muted">
@@ -118,7 +154,7 @@ async function FlipList({ houseId, faction }: { houseId: number; faction: string
         </ul>
       )}
       <p className="text-xs text-muted">
-        Beneficio = revender a la mediana de 7 días menos la comisión del {Math.round(s.cut * 100)}%, menos el depósito de 24 h por la
+        <b>Cómo se calcula</b>: beneficio = revender a la mediana de 7 días menos la comisión del {Math.round(s.cut * 100)}%, menos el depósito de 24 h por la
         probabilidad de no venderse. “Compra X uds” son las que están a ≤85% de la mediana. Las ventas son estimadas.
       </p>
     </>
@@ -140,17 +176,20 @@ async function VendorList({ houseId }: { houseId: number }) {
                 <div className="min-w-0">
                   <ItemTitle row={r} lang={lang} />
                   <p className="mt-1 text-xs text-muted">
-                    {r.vendor_units} uds desde {formatMoney(r.min_buyout)} · el vendedor paga {formatMoney(r.vendor_sell)}
+                    compra {r.vendor_units} uds desde {formatMoney(r.min_buyout)} · el vendedor te paga {formatMoney(r.vendor_sell)} c/u
                   </p>
                 </div>
-                <p className="shrink-0 font-mono text-sm text-good">+{formatMoney(r.vendor_profit)}</p>
+                <p className="shrink-0 text-right font-mono text-sm text-good" title="Ganancia total comprando todas esas unidades y vendiéndolas al vendedor">
+                  +{formatMoney(r.vendor_profit)}
+                  <span className="block font-sans text-xs text-muted">ganas</span>
+                </p>
               </Link>
             </li>
           ))}
         </ul>
       )}
       <p className="text-xs text-muted">
-        Ganancia segura: compras en la subasta y vendes al vendedor (sin comisión ni depósito). Suelen ser céntimos por unidad; mira el total.
+        <b>Cómo se hace</b>: compras en la subasta y vendes al vendedor (sin comisión ni depósito). Suelen ser céntimos por unidad; mira el total.
       </p>
     </>
   );
@@ -226,7 +265,7 @@ function ItemTitle({ row: r, lang }: { row: LatestPriceRow; lang: Lang }) {
   return (
     <span className="flex min-w-0 items-center gap-3">
       <ItemIcon src={r.icon_url} quality={r.quality} />
-      <span className={`truncate font-medium q-${r.quality ?? "COMMON"}`}>{pick(r.name_en, r.name_es, lang) ?? `Objeto #${r.item_id}`}</span>
+      <span className={`line-clamp-2 font-medium leading-snug q-${r.quality ?? "COMMON"}`}>{pick(r.name_en, r.name_es, lang) ?? `Objeto #${r.item_id}`}</span>
       {r.activity && r.activity !== "normal" && (
         <span className={`shrink-0 rounded border px-1.5 py-px text-[11px] ${ACTIVITY_CLASS[r.activity]}`}>{ACTIVITY_LABEL[r.activity]}</span>
       )}

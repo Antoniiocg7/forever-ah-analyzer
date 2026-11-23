@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { Hint } from "@/components/Hint";
 import { Loading, SetupNotice } from "@/components/notices";
+import { PageIntro } from "@/components/PageIntro";
 import { adminTokenRequired } from "@/lib/admin";
 import { alertConfig } from "@/lib/alerts/run";
 import { isConfigured } from "@/lib/env";
@@ -28,10 +30,19 @@ const KIND: Record<string, string> = { deal: "Chollo", watch: "Seguimiento", lev
 export default function Page({ searchParams }: PageProps<"/alerts">) {
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold">Alertas de Telegram</h1>
-        <p className="mt-1 text-sm text-muted">Avisos en el móvil de chollos, de precios que vigilas y de buenos momentos para subir profesiones.</p>
-      </div>
+      <Link href="/admin/houses" className="text-sm text-muted">
+        ← Ajustes
+      </Link>
+      <PageIntro
+        title="Alertas de Telegram"
+        summary="Mensajes al móvil cuando aparece un chollo, cuando un precio que vigilas cruza tu límite o cuando es buen momento para subir una profesión."
+        steps={[
+          "Conecta el bot de Telegram (pasos en “Estado”). Solo se hace una vez.",
+          "En “Qué avisar” elige a partir de cuánto beneficio quieres que te avise de un chollo y a qué hora quieres el resumen diario.",
+          "Para vigilar un objeto concreto, entra en su ficha (desde Precios) y usa “Avísame por Telegram”.",
+          "Para que te avise cuando subir una profesión salga barato, añádela abajo con el tramo de niveles que te interesa.",
+        ]}
+      />
       <Suspense fallback={<Loading />}>
         <Alerts searchParams={searchParams} />
       </Suspense>
@@ -93,18 +104,28 @@ async function Alerts({ searchParams }: Pick<PageProps<"/alerts">, "searchParams
           <label className="flex items-center gap-2">
             <input type="checkbox" name="enabled" defaultChecked={s.enabled} className="h-4 w-4 accent-[#e0b354]" />
             Alertas activadas
+            <span className="text-xs text-muted">(desmárcalo para pausarlas sin perder la configuración)</span>
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label>
-              <span className="text-muted">Chollo: beneficio mínimo</span>
+              <span className="flex items-center gap-1 text-muted">
+                Avisar de chollos desde
+                <Hint label="Beneficio mínimo de un chollo">Solo te avisa de chollos que dejen al menos este beneficio en total. Escríbelo como 5g o 2g 50s.</Hint>
+              </span>
               <input className="input mt-1" name="min_deal_profit" defaultValue={formatMoney(s.minDealProfit)} placeholder="5g" required />
             </label>
             <label>
-              <span className="text-muted">Máx. avisos de chollos por hora</span>
+              <span className="flex items-center gap-1 text-muted">
+                Máx. chollos por hora
+                <Hint label="Máximo de avisos por hora">Para no llenarte el móvil: como mucho este número de chollos en cada revisión horaria (los mejores). Un mismo objeto no se repite en 6 h.</Hint>
+              </span>
               <input className="input mt-1" type="number" name="max_per_run" min={0} max={20} defaultValue={s.maxPerRun} required />
             </label>
             <label>
-              <span className="text-muted">Hora del resumen diario</span>
+              <span className="flex items-center gap-1 text-muted">
+                Hora del resumen diario
+                <Hint label="Resumen diario">Una vez al día, a partir de esta hora (0–23, hora de Polonia), te manda un resumen con los mejores chollos.</Hint>
+              </span>
               <input className="input mt-1" type="number" name="daily_hour" min={0} max={23} defaultValue={s.dailyHour} required />
             </label>
             <label>
@@ -117,7 +138,15 @@ async function Alerts({ searchParams }: Pick<PageProps<"/alerts">, "searchParams
           </div>
 
           <fieldset className="space-y-2">
-            <legend className="text-muted">Avísame si es buen momento para subir (≥15% más barato que una semana normal)</legend>
+            <legend className="text-muted">
+              Avísame cuando subir una profesión salga barato (≥15% menos que una semana normal). Elige la profesión y el tramo: desde el
+              nivel → hasta el nivel.
+            </legend>
+            <div className="grid grid-cols-[1fr_4.5rem_4.5rem] gap-2 text-xs text-muted" aria-hidden>
+              <span>Profesión</span>
+              <span>Desde nivel</span>
+              <span>Hasta nivel</span>
+            </div>
             {levelingRows.map((lv, i) => (
               <div key={i} className="grid grid-cols-[1fr_4.5rem_4.5rem] gap-2">
                 <select className="input" name="lv_slug" defaultValue={lv.slug} aria-label="Profesión">
@@ -134,7 +163,7 @@ async function Alerts({ searchParams }: Pick<PageProps<"/alerts">, "searchParams
             ))}
           </fieldset>
           {tokenField}
-          <button className="btn w-full sm:w-auto">Guardar</button>
+          <button className="btn w-full sm:w-auto">Guardar qué avisar</button>
         </form>
       </section>
 

@@ -3,9 +3,11 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { AutoSubmitForm } from "@/components/AutoSubmitForm";
 import { GameContextBanner } from "@/components/GameContextBanner";
+import { Hint } from "@/components/Hint";
 import { HouseTabs } from "@/components/HouseTabs";
 import { ItemIcon } from "@/components/ItemIcon";
 import { Loading, NoHousesNotice, SetupNotice } from "@/components/notices";
+import { PageIntro } from "@/components/PageIntro";
 import { isConfigured } from "@/lib/env";
 import { pick, type Lang } from "@/lib/lang";
 import { nameLang } from "@/lib/lang-server";
@@ -24,14 +26,32 @@ import {
 import type { LatestPriceRow } from "@/lib/supabase";
 
 /** Búsquedas rápidas para Minería, Herrería y First Aid. */
-const QUICK = ["Ore", "Bar", "Stone", "Cloth", "Bandage"];
+const QUICK: { term: string; tip: string }[] = [
+  { term: "Ore", tip: "Minerales (Copper Ore, Iron Ore…)" },
+  { term: "Bar", tip: "Barras fundidas (Copper Bar, Thorium Bar…)" },
+  { term: "Stone", tip: "Piedras de minería (Rough Stone, Solid Stone…)" },
+  { term: "Cloth", tip: "Telas para vendas y sastrería (Linen Cloth, Runecloth…)" },
+  { term: "Bandage", tip: "Vendas de primeros auxilios" },
+];
 const ACTIVITIES: Activity[] = ["high", "normal", "low"];
 
 export default function Page({ searchParams }: PageProps<"/">) {
   return (
-    <Suspense fallback={<Loading />}>
-      <Explorer searchParams={searchParams} />
-    </Suspense>
+    <div className="space-y-4">
+      <PageIntro
+        title="Precios"
+        summary="Busca cualquier objeto de la subasta: cuánto cuesta ahora, cuánto suele costar y cuánto se vende al día."
+        steps={[
+          "Escribe un nombre (en inglés o español) o pulsa un atajo, como Ore o Cloth.",
+          "Ordena y filtra la lista: más vendidos, más baratos, los que están por debajo de su precio habitual…",
+          "El precio dorado es el más barato ahora; debajo, su precio normal de la semana. Verde = más barato de lo normal, rojo = más caro.",
+          "Toca un objeto para ver su gráfica, en qué recetas se usa y crear un aviso de precio.",
+        ]}
+      />
+      <Suspense fallback={<Loading />}>
+        <Explorer searchParams={searchParams} />
+      </Suspense>
+    </div>
   );
 }
 
@@ -91,13 +111,14 @@ async function Explorer({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
       <AutoSubmitForm action="/" className="space-y-3" role="search">
         <input type="hidden" name="house" value={house.id} />
         <div className="flex gap-2">
-          <input className="input" type="search" name="q" defaultValue={q} placeholder="Busca un objeto o su ID (en inglés o español)" enterKeyHint="search" aria-label="Buscar objeto" />
+          <input className="input" type="search" name="q" defaultValue={q} placeholder="Nombre o ID del objeto" enterKeyHint="search" aria-label="Buscar objeto" />
           <button className="btn shrink-0">Buscar</button>
         </div>
+        <p className="-mt-1 text-xs text-muted">Los desplegables se aplican solos al cambiarlos; los precios, al pulsar Enter o Buscar.</p>
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <label className="text-xs text-muted">
-            Ordenar
+            Ordenar por
             <select name="sort" defaultValue={sort} className="input mt-1 text-sm">
               {(Object.keys(PRICE_SORTS) as PriceSort[]).map((s) => (
                 <option key={s} value={s}>
@@ -107,7 +128,7 @@ async function Explorer({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
             </select>
           </label>
           <label className="text-xs text-muted">
-            Tipo
+            Tipo de objeto
             <select name="tipo" defaultValue={cls} className="input mt-1 text-sm">
               <option value="">Todos</option>
               {ITEM_CLASSES.map((c) => (
@@ -118,7 +139,13 @@ async function Explorer({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
             </select>
           </label>
           <label className="text-xs text-muted">
-            Mercado
+            <span className="flex items-center gap-1">
+              Cuánto se vende
+              <Hint label="¿Qué es mucho o poco mercado?">
+                <b>Mucho mercado</b>: se vende muchísimo o rota más de la mitad de lo que hay en venta cada día; lo venderás rápido.{" "}
+                <b>Poco mercado</b>: menos de 5 ventas al día; puedes tardar en venderlo. Las ventas son una estimación.
+              </Hint>
+            </span>
             <select name="mercado" defaultValue={activity ?? ""} className="input mt-1 text-sm">
               <option value="">Todos</option>
               {ACTIVITIES.map((a) => (
@@ -130,21 +157,23 @@ async function Explorer({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
           </label>
           <div className="grid grid-cols-2 gap-2 text-xs text-muted">
             <label>
-              Desde
-              <input name="desde" defaultValue={str(sp.desde)} placeholder="1g" className="input mt-1 px-2 text-sm" aria-label="Precio mínimo" />
+              Precio desde
+              <input name="desde" defaultValue={str(sp.desde)} placeholder="1g" className="input mt-1 px-2 text-sm" aria-label="Precio mínimo por unidad (p. ej. 1g 20s)" />
             </label>
             <label>
-              Hasta
-              <input name="hasta" defaultValue={str(sp.hasta)} placeholder="50g" className="input mt-1 px-2 text-sm" aria-label="Precio máximo" />
+              hasta
+              <input name="hasta" defaultValue={str(sp.hasta)} placeholder="50g" className="input mt-1 px-2 text-sm" aria-label="Precio máximo por unidad (p. ej. 50g)" />
             </label>
           </div>
         </div>
       </AutoSubmitForm>
 
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 text-sm">
-        {QUICK.map((term) => (
-          <Link key={term} href={params({ q: q === term ? "" : term })} className={chip(q === term)}>
+      <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 text-sm">
+        <span className="shrink-0 text-xs text-muted">Atajos</span>
+        {QUICK.map(({ term, tip }) => (
+          <Link key={term} href={params({ q: q === term ? "" : term })} className={chip(q === term)} title={q === term ? "Quitar esta búsqueda" : `Buscar: ${tip}`}>
             {term}
+            {q === term && " ✕"}
           </Link>
         ))}
         {filtersOn && (
@@ -176,8 +205,15 @@ async function Explorer({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
       ) : (
         <>
           <p className="text-xs text-muted">
-            {page > 0 ? `Del ${page * PAGE_SIZE + 1} al ${page * PAGE_SIZE + rows.length}` : hasMore ? `Los ${PAGE_SIZE} primeros` : `${rows.length} objetos`} · {PRICE_SORTS[sort].toLowerCase()}
+            {page > 0 ? `Del ${page * PAGE_SIZE + 1} al ${page * PAGE_SIZE + rows.length}` : hasMore ? `Los ${PAGE_SIZE} primeros` : `${rows.length} objetos`}
             {updated && ` · precios de ${new Date(updated).toLocaleString("es-ES", { timeZone: "Europe/Warsaw", dateStyle: "short", timeStyle: "short" })}`}
+            <Hint label="Cómo leer la lista" className="ml-1.5">
+              <b>Izquierda</b>: nombre, cuánto se vende (mucho / normal / poco mercado), ventas estimadas al día y unidades en venta.
+              <br />
+              <b>Derecha</b>: en dorado, el precio por unidad más barato ahora. Debajo, el precio normal de la última semana (mediana de 7
+              días) y cuánto se aleja: <span className="text-good">−20%</span> = más barato de lo normal,{" "}
+              <span className="text-bad">+20%</span> = más caro.
+            </Hint>
           </p>
           <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
             {rows.map((r) => (
@@ -241,7 +277,10 @@ function PriceRow({ row: r, houseId, lang, showTrend }: { row: LatestPriceRow; h
           </p>
         </div>
       </div>
-      <div className="shrink-0 text-right font-mono text-sm">
+      <div
+        className="shrink-0 text-right font-mono text-sm"
+        title={`Más barato ahora: ${formatMoney(r.min_buyout)} por unidad${r.market_7d !== null ? ` · precio normal (mediana 7 días): ${formatMoney(r.market_7d)}` : ""}`}
+      >
         <p className="text-gold">{formatMoney(r.min_buyout)}</p>
         <p className="text-xs text-muted">
           {showPct && (
@@ -250,7 +289,7 @@ function PriceRow({ row: r, houseId, lang, showTrend }: { row: LatestPriceRow; h
               {Math.abs(pct!)}%{" "}
             </span>
           )}
-          {r.market_7d !== null ? `7 d ${formatMoney(r.market_7d)}` : `merc. ${formatMoney(r.p15_market)}`}
+          {r.market_7d !== null ? `normal ${formatMoney(r.market_7d)}` : `mercado ${formatMoney(r.p15_market)}`}
         </p>
       </div>
     </Link>

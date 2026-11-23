@@ -2,6 +2,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { Loading, NoRecipesNotice, SetupNotice } from "@/components/notices";
+import { PageIntro } from "@/components/PageIntro";
 import { isConfigured } from "@/lib/env";
 import { pick } from "@/lib/lang";
 import { nameLang } from "@/lib/lang-server";
@@ -12,10 +13,15 @@ import { saveMyProfessions } from "./actions";
 export default function Page({ searchParams }: PageProps<"/professions">) {
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold">Profesiones</h1>
-        <p className="mt-1 text-sm text-muted">Todas las recetas de cada profesión, las tengas aprendidas o no, con su coste y su beneficio a precios de la subasta.</p>
-      </div>
+      <PageIntro
+        title="Profesiones"
+        summary="Todas las recetas de cada profesión, las tengas aprendidas o no, con lo que cuesta fabricarlas y lo que ganas vendiéndolas."
+        steps={[
+          "Marca en “Mis profesiones” las que tienes: así se calcula si te sale más barato fabricar un material (p. ej. fundir barras) que comprarlo.",
+          "Entra en una profesión para ver sus recetas ordenadas por beneficio. Toca una receta para ver sus materiales y precios.",
+          "Para subir de nivel, entra en la profesión y pulsa “Planificar subida”: te da la ruta más barata y la lista de la compra.",
+        ]}
+      />
       <Suspense fallback={<Loading />}>
         <Professions searchParams={searchParams} />
       </Suspense>
@@ -41,7 +47,7 @@ async function Professions({ searchParams }: Pick<PageProps<"/professions">, "se
 
       <details className="card" open={!settings.myProfessionsFromBrowser}>
         <summary className="cursor-pointer text-sm font-medium">
-          Mis profesiones: {mine.length ? all.filter((p) => mine.includes(p.slug)).map((p) => p.name).join(", ") : "ninguna"}
+          ✎ Mis profesiones: {mine.length ? all.filter((p) => mine.includes(p.slug)).map((p) => p.name).join(", ") : "ninguna"}
           {!settings.myProfessionsFromBrowser && <span className="font-normal text-muted"> (las de por defecto)</span>}
         </summary>
         <form action={saveMyProfessions} className="mt-3 space-y-3">
@@ -71,6 +77,9 @@ async function Professions({ searchParams }: Pick<PageProps<"/professions">, "se
               <p className="font-medium">{p.name}</p>
               <p className="mt-1 text-xs text-muted">
                 {p.recipes.toLocaleString("es-ES")} recetas{mine.includes(p.slug) && " · tuya"}
+              </p>
+              <p className="mt-2 text-xs text-gold">
+                Ver recetas →
               </p>
             </Link>
           </li>
