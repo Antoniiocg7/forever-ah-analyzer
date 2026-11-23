@@ -61,4 +61,9 @@ export type LatestPriceRow = {
   sold_source: "week" | "24h" | null;
   sold_hours: number | null;
   activity: "high" | "normal" | "low" | null;
+  /** ESTIMACIÓN de unidades nuevas publicadas al día (reposición). */
+  listed_per_day: number | null;
+  /** Cebo: unidades sueltas muy baratas delante del mercado real, y el primer precio real. */
+  bait_units: number | null;
+  real_min: number | null;
 };

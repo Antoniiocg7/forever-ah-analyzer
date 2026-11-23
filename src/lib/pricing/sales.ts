@@ -32,6 +32,23 @@ export const MIN_REMAINING_MS: Record<TimeLeft, number> = {
 export const MAX_GAP_MS = MIN_REMAINING_MS.VERY_LONG;
 
 /**
+ * ESTIMACIÓN de reposición por objeto: oferta NETA que entra entre dos snapshots,
+ * stock de ahora − stock de antes + vendidas. No se cuentan las subastas con ID nuevo porque quien
+ * cancela y vuelve a publicar cada hora (guerra de rebajas) contaría las mismas unidades una y otra
+ * vez: con eso Copper Ore salía con 4.900 "nuevas" por hora teniendo 6.300 en venta.
+ */
+export function estimateListings(prev: CompactAuction[], curr: Listing[], sold: ReadonlyMap<number, number>): Map<number, number> {
+  const delta = new Map<number, number>();
+  const add = (id: number, n: number) => delta.set(id, (delta.get(id) ?? 0) + n);
+  for (const [, itemId, qty] of prev) add(itemId, -qty);
+  for (const l of curr) add(l.itemId, l.qty);
+  for (const [itemId, n] of sold) add(itemId, n);
+  const out = new Map<number, number>();
+  for (const [itemId, n] of delta) if (n > 0) out.set(itemId, n);
+  return out;
+}
+
+/**
  * ESTIMACIÓN de unidades vendidas por objeto entre dos snapshots separados `gapMs`.
  * - Subasta que sigue pero con menos unidades (commodities) → la diferencia se cuenta como vendida:
  *   una compra parcial no puede ser una cancelación.

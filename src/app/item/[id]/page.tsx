@@ -58,6 +58,14 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
   const stats: { label: string; value: string; hint: string }[] = [
     { label: "Más barato ahora", value: formatMoney(latest?.min_buyout), hint: "Precio por unidad de la subasta más barata en este momento: lo que pagarías si compras ya." },
     {
+      label: "Publica a",
+      value: latest ? formatMoney(Math.max(1, (latest.real_min ?? latest.min_buyout) - 1)) : "—",
+      hint:
+        latest?.real_min != null
+          ? `Ojo: el más barato son ${latest.bait_units} ud sueltas muy por debajo (un cebo para que la gente rebaje). El precio real empieza en ${formatMoney(latest.real_min)}: publica 1c por debajo de ese, no del cebo (o compra el cebo, que está barato).`
+          : "1 cobre por debajo del más barato: así tu subasta sale la primera.",
+    },
+    {
       label: "Precio de mercado",
       value: formatMoney(latest?.p15_market),
       hint: "Media del 15% de unidades más baratas. Más fiable que el mínimo, que puede ser una sola subasta suelta.",

@@ -1,4 +1,5 @@
 import type { Listing } from "../blizzard/client";
+import { buildLadder, type Ladder } from "./reset";
 
 export type ItemAggregate = {
   itemId: number;
@@ -9,6 +10,8 @@ export type ItemAggregate = {
   median: number;
   qty: number;
   numAuctions: number;
+  /** Escalera de precios (primeros escalones), para resets y cebos. */
+  ladder: Ladder;
 };
 
 /** Los listados por encima de este múltiplo de la mediana no cuentan. */
@@ -45,13 +48,15 @@ export function aggregateItem(itemId: number, listings: Priced[]): ItemAggregate
     if (remaining === 0) break;
   }
 
+  const median = weightedMedian(kept, qty);
   return {
     itemId,
     minBuyout: kept[0].price,
     p15Market: Math.round(marketSum / marketUnits),
-    median: weightedMedian(kept, qty),
+    median,
     qty,
     numAuctions: kept.length,
+    ladder: buildLadder(kept, median),
   };
 }
 

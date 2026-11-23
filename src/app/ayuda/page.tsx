@@ -57,6 +57,15 @@ const TERMS: { term: string; text: ReactNode }[] = [
     term: "Beneficio de un chollo",
     text: "Lo que ganarías comprando ahora y revendiendo a la mediana de 7 días, después de la comisión y del riesgo de perder el depósito si no se vende.",
   },
+  {
+    term: "Cebo",
+    text: "1–2 unidades sueltas puestas muy por debajo del resto (≥ 20% más baratas) para que quien publica con Auctionator rebaje a ese precio. No las tomes como referencia: publica por debajo del precio “real” (el primero con volumen). Comprar el cebo suele ser buena idea.",
+  },
+  {
+    term: "Resetear un mercado",
+    text: "Comprar todas las unidades baratas de un objeto hasta el siguiente escalón de precio (el “muro”) y volver a publicarlas más caras. Funciona con objetos que se venden bien y que nadie repone enseguida; si se repone rápido, te quedas con el stock.",
+  },
+  { term: "Reposición", text: "ESTIMACIÓN de unidades nuevas que se publican al día (incluye las que se cancelan y se vuelven a poner). Si se repone tanto como se vende, un reset no aguanta." },
   { term: "Profundidad", text: "Cuántas unidades puedes comprar antes de que el precio deje de ser una ganga (≤ 85% de la mediana)." },
   {
     term: "Colores de receta",

@@ -213,6 +213,9 @@ async function Explorer({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
               <b>Derecha</b>: en dorado, el precio por unidad más barato ahora. Debajo, el precio normal de la última semana (mediana de 7
               días) y cuánto se aleja: <span className="text-good">−20%</span> = más barato de lo normal,{" "}
               <span className="text-bad">+20%</span> = más caro.
+              <br />
+              <b className="text-bad">Cebo</b>: alguien ha puesto 1–2 unidades sueltas muy baratas para que los demás rebajen a ese precio.
+              “Real” es el primer precio con volumen: publica por debajo de ese, no del cebo.
             </Hint>
           </p>
           <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
@@ -268,6 +271,11 @@ function PriceRow({ row: r, houseId, lang, showTrend }: { row: LatestPriceRow; h
               <span>ventas: sin datos</span>
             )}
             <span>· {r.qty.toLocaleString("es-ES")} en venta</span>
+            {r.real_min !== null && (
+              <span className="rounded border border-bad/60 px-1.5 py-px text-bad">
+                cebo: {r.bait_units} {r.bait_units === 1 ? "ud suelta" : "uds sueltas"}
+              </span>
+            )}
             {showTrend && r.trend !== null && (
               <span className={r.trend >= 0 ? "text-bad" : "text-good"}>
                 · semana {r.trend >= 0 ? "+" : "−"}
@@ -282,6 +290,7 @@ function PriceRow({ row: r, houseId, lang, showTrend }: { row: LatestPriceRow; h
         title={`Más barato ahora: ${formatMoney(r.min_buyout)} por unidad${r.market_7d !== null ? ` · precio normal (mediana 7 días): ${formatMoney(r.market_7d)}` : ""}`}
       >
         <p className="text-gold">{formatMoney(r.min_buyout)}</p>
+        {r.real_min !== null && <p className="text-xs text-fg">real {formatMoney(r.real_min)}</p>}
         <p className="text-xs text-muted">
           {showPct && (
             <span className={pct! < 0 ? "text-good" : "text-bad"}>

@@ -1,5 +1,6 @@
 import type { GameEvent } from "./calendar";
 import type { DealSettings } from "./pricing/deals";
+import { bestReset, DEFAULT_RESET, type Ladder, type Reset } from "./pricing/reset";
 import { supabaseAdmin, type LatestPriceRow } from "./supabase";
 
 const PAGE = 1000;
@@ -77,4 +78,55 @@ export async function marketableItems(houseId: number): Promise<LatestPriceRow[]
 export async function calendarEvents(): Promise<GameEvent[]> {
   const row = unwrap<{ value: GameEvent[] } | null>(await supabaseAdmin().from("settings").select("value").eq("key", "calendar").maybeSingle());
   return Array.isArray(row?.value) ? row.value : [];
+}
+
+export type ResetCandidate = { row: LatestPriceRow; reset: Reset };
+
+/**
+ * Mejores resets de mercado con el presupuesto dado: objetos que se venden (≥ 3/día) y valen algo
+ * (≥ 10s), con su escalera de precios actual.
+ */
+export const RESET_KINDS = {
+  materiales: { label: "Materiales", classes: ["Trade Goods", "Reagent", "Gem"] },
+  consumibles: { label: "Consumibles", classes: ["Consumable"] },
+  todo: { label: "Todo", classes: null },
+} as const;
+export type ResetKind = keyof typeof RESET_KINDS;
+
+export async function resetCandidates(houseId: number, s: DealSettings, budget: number, kind: ResetKind = "materiales"): Promise<ResetCandidate[]> {
+  const classes = RESET_KINDS[kind].classes;
+  const rows: LatestPriceRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    let query = supabaseAdmin()
+      .from("latest_item_prices")
+      .select("*")
+      .eq("house_id", houseId)
+      .gte("sold_per_day", 3)
+      .gte("p15_market", 1000)
+      .gte("num_auctions", 2);
+    if (classes) query = query.in("class", [...classes]);
+    const page = unwrap<LatestPriceRow[]>(await query.order("item_id").range(from, from + PAGE - 1));
+    rows.push(...page);
+    if (page.length < PAGE) break;
+  }
+
+  const ladders = new Map<number, Ladder>();
+  for (let i = 0; i < rows.length; i += 300) {
+    const ids = rows.slice(i, i + 300).map((r) => r.item_id);
+    const page = unwrap<{ item_id: number; ladder: Ladder | null }[]>(
+      await supabaseAdmin().from("item_prices_latest").select("item_id, ladder").eq("house_id", houseId).in("item_id", ids),
+    );
+    for (const p of page) if (p.ladder) ladders.set(p.item_id, p.ladder);
+  }
+
+  const settings = { ...DEFAULT_RESET, cut: s.cut, budget, depositPct: s.deposit.pct["24"] ?? DEFAULT_RESET.depositPct };
+  const out: ResetCandidate[] = [];
+  for (const row of rows) {
+    const ladder = ladders.get(row.item_id);
+    const market = row.market_7d ?? row.p15_market;
+    if (!ladder || !market) continue;
+    const reset = bestReset({ ladder, market, soldPerDay: row.sold_per_day, listedPerDay: row.listed_per_day, vendorSell: row.vendor_sell }, settings);
+    if (reset) out.push({ row, reset });
+  }
+  return out.sort((a, b) => b.reset.expectedProfit - a.reset.expectedProfit);
 }

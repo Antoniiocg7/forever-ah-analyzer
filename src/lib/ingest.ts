@@ -3,7 +3,8 @@ import { BlizzardClient } from "./blizzard/client";
 import { factionFromName } from "./blizzard/schemas";
 import { aggregateListings } from "./pricing/aggregate";
 import { computeDepth } from "./pricing/deals";
-import { decodeState, encodeState, estimateSales, toCompact } from "./pricing/sales";
+import { detectBait } from "./pricing/reset";
+import { decodeState, encodeState, estimateListings, estimateSales, toCompact } from "./pricing/sales";
 import { REFERENCE_ITEMS } from "./reference-items";
 
 const CHUNK = 1000;
@@ -87,12 +88,15 @@ export async function ingestHouse(
 
     // Ventas: diferencia con el estado anterior. Si el estado está corrupto, se sigue sin estimar.
     let sold: Map<number, number> | null = null;
+    let listed: Map<number, number> | null = null;
     let gapMs: number | null = null;
     const prev = await must(db.from("house_state").select("data_at, fetched_at, state").eq("house_id", houseId).maybeSingle());
     if (prev) {
       try {
         gapMs = dataAt.getTime() - new Date(prev.data_at ?? prev.fetched_at).getTime();
-        sold = estimateSales(decodeState(prev.state as string), listings, gapMs);
+        const prevState = decodeState(prev.state as string);
+        sold = estimateSales(prevState, listings, gapMs);
+        listed = sold ? estimateListings(prevState, listings, sold) : null;
       } catch (err) {
         await logError(db, houseId, "state", err);
       }
@@ -124,30 +128,37 @@ export async function ingestHouse(
       qty: a.qty,
       num_auctions: a.numAuctions,
       est_sold: sold ? (sold.get(a.itemId) ?? 0) : null,
+      est_listed: listed ? (listed.get(a.itemId) ?? 0) : null,
     }));
     // Objetos que se han agotado: sin precio, pero sus ventas cuentan.
     for (const [itemId, n] of sold ?? []) {
       if (!aggregates.has(itemId) && n > 0) {
-        rows.push({ snapshot_id: snapshot.id, item_id: itemId, min_buyout: null, p15_market: null, qty: 0, num_auctions: 0, est_sold: n });
+        rows.push({ snapshot_id: snapshot.id, item_id: itemId, min_buyout: null, p15_market: null, qty: 0, num_auctions: 0, est_sold: n, est_listed: 0 });
       }
     }
     for (const part of chunks(rows, CHUNK)) await must(db.from("item_prices_hourly").insert(part));
 
     // Precio actual: se sobrescribe y luego se borra lo que ya no está en venta.
-    const latest = [...aggregates.values()].map((a) => ({
-      house_id: houseId,
-      item_id: a.itemId,
-      snapshot_id: snapshot.id,
-      fetched_at: fetchedAt.toISOString(),
-      min_buyout: a.minBuyout,
-      p15_market: a.p15Market,
-      qty: a.qty,
-      num_auctions: a.numAuctions,
-      deal_units: depth.get(a.itemId)?.dealUnits ?? 0,
-      deal_cost: depth.get(a.itemId)?.dealCost ?? 0,
-      vendor_units: depth.get(a.itemId)?.vendorUnits ?? 0,
-      vendor_profit: depth.get(a.itemId)?.vendorProfit ?? 0,
-    }));
+    const latest = [...aggregates.values()].map((a) => {
+      const bait = detectBait(a.ladder);
+      return {
+        house_id: houseId,
+        item_id: a.itemId,
+        snapshot_id: snapshot.id,
+        fetched_at: fetchedAt.toISOString(),
+        min_buyout: a.minBuyout,
+        p15_market: a.p15Market,
+        qty: a.qty,
+        num_auctions: a.numAuctions,
+        deal_units: depth.get(a.itemId)?.dealUnits ?? 0,
+        deal_cost: depth.get(a.itemId)?.dealCost ?? 0,
+        vendor_units: depth.get(a.itemId)?.vendorUnits ?? 0,
+        vendor_profit: depth.get(a.itemId)?.vendorProfit ?? 0,
+        ladder: a.ladder,
+        bait_units: bait?.units ?? null,
+        real_min: bait?.realPrice ?? null,
+      };
+    });
     for (const part of chunks(latest, CHUNK)) await must(db.from("item_prices_latest").upsert(part));
     await must(db.from("item_prices_latest").delete().eq("house_id", houseId).neq("snapshot_id", snapshot.id));
     // Ventas de las últimas 24 h (para mostrar ventas/día sin esperar a la media semanal).
