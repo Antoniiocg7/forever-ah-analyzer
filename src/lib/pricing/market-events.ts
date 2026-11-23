@@ -24,9 +24,12 @@ export const RESET_RULES = {
   overMarket: 1.15,
   /** Solo objetos de 10s o más. */
   minMarket: 1000,
-  /** Al menos 3 unidades compradas y 1g gastado. */
-  minUnits: 3,
-  minCost: 10000,
+  /**
+   * Al menos 10 unidades compradas y 10g gastados. Con 3 uds / 1g salían ~36 "resets" por hora, casi
+   * todos alguien comprando 3–8 piezas de equipo baratas (una compra normal, no un reset).
+   */
+  minUnits: 10,
+  minCost: 100000,
   /** Al menos la mitad de lo barato desapareció como venta (no cancelado ni caducado). */
   soldShare: 0.5,
 } as const;
