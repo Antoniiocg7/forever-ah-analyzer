@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ALERTS, dealAlerts, digestHtml, digestKeyDue, levelingAlerts, resetAlerts, warsawNow, watchAlerts, type DealCandidate } from "./rules";
+import { DEFAULT_ALERTS, dealAlerts, digestHtml, digestKeyDue, eventAlerts, levelingAlerts, resetAlerts, warsawNow, watchAlerts, type DealCandidate } from "./rules";
 
 const base = "https://example.test";
 const deal = (itemId: number, depthProfit: number): DealCandidate => ({ itemId, name: `Item ${itemId}`, min: 100, market7d: 200, units: 3, cost: 300, depthProfit, soldPerDay: 10 });
@@ -80,5 +80,40 @@ describe("resetAlerts", () => {
   it("respeta el antispam y el mínimo", () => {
     expect(resetAlerts([ev], DEFAULT_ALERTS, new Set(["reset:7"]), "https://x")).toEqual([]);
     expect(resetAlerts([{ ...ev, cost: 100 }], DEFAULT_ALERTS, new Set(), "https://x")).toEqual([]);
+  });
+});
+
+describe("eventAlerts", () => {
+  const ev = {
+    slug: "darkmoon-faire",
+    name: "Feria de la Luna Negra",
+    starts: "2026-12-07",
+    phase: "soon" as const,
+    daysUntil: 14,
+    daysLeft: 0,
+    daysSinceStart: -14,
+    items: [
+      { itemId: 5134, name: "Small Furry Paw", min: 500, action: "buy" as const },
+      { itemId: 4363, name: "Copper Modulator", min: 900, action: "wait" as const },
+    ],
+  };
+  it("a 14 días avisa solo de lo que conviene comprar", () => {
+    const [a] = eventAlerts([ev], new Set(), "https://x");
+    expect(a.key).toBe("event:darkmoon-faire:2026-12-07:buy");
+    expect(a.html).toContain("Small Furry Paw");
+    expect(a.html).not.toContain("Copper Modulator");
+  });
+  it("una vez por aparición", () => {
+    expect(eventAlerts([ev], new Set(["event:darkmoon-faire:2026-12-07:buy"]), "https://x")).toEqual([]);
+  });
+  it("fuera de la ventana no avisa", () => {
+    expect(eventAlerts([{ ...ev, daysUntil: 10 }], new Set(), "https://x")).toEqual([]);
+  });
+  it("al empezar, vender", () => {
+    const [a] = eventAlerts([{ ...ev, phase: "during", daysUntil: 0, daysLeft: 7, daysSinceStart: 0 }], new Set(), "https://x");
+    expect(a.key).toBe("event:darkmoon-faire:2026-12-07:sell");
+  });
+  it("no repite el aviso de vender a mitad de un evento largo", () => {
+    expect(eventAlerts([{ ...ev, phase: "during", daysUntil: 0, daysLeft: 10, daysSinceStart: 5 }], new Set(), "https://x")).toEqual([]);
   });
 });

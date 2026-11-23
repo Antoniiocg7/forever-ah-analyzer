@@ -18,9 +18,9 @@ export type AlertSettings = {
 export const DEFAULT_ALERTS: AlertSettings = { enabled: true, minDealProfit: 50000, maxPerRun: 5, dailyHour: 9, lang: "en", leveling: [] };
 
 /** Horas de antispam por tipo (CLAUDE.md: como mucho una alerta por objeto cada 6 h). */
-export const COOLDOWN_HOURS = { deal: 6, watch: 6, leveling: 24, reset: 12 } as const;
+export const COOLDOWN_HOURS = { deal: 6, watch: 6, leveling: 24, reset: 12, event: 72 } as const;
 
-export type Alert = { key: string; kind: "deal" | "watch" | "leveling" | "reset" | "digest" | "test"; itemId?: number; html: string };
+export type Alert = { key: string; kind: "deal" | "watch" | "leveling" | "reset" | "event" | "digest" | "test"; itemId?: number; html: string };
 
 export type DealCandidate = {
   itemId: number;
@@ -110,6 +110,59 @@ export function resetAlerts(events: ResetCandidateAlert[], s: AlertSettings, rec
           `Si tienes, vende a ${formatMoney(sellAt)}. Si no, no compres caro: puede caerse.`,
       };
     });
+}
+
+export type EventAlertInput = {
+  slug: string;
+  name: string;
+  starts: string;
+  phase: "during" | "soon" | "far" | "past";
+  daysUntil: number;
+  daysLeft: number;
+  /** Días desde que empezó (0 = el primer día). */
+  daysSinceStart: number;
+  items: { itemId: number; name: string; min: number | null; action: "buy" | "sell" | "wait" | "watch" }[];
+};
+
+/**
+ * Eventos de temporada: un aviso a 13–14 días ("compra lo que esté a precio normal") y otro el
+ * primer día ("vende"). La clave incluye la fecha de inicio, así que cada aparición avisa una vez.
+ */
+export function eventAlerts(events: EventAlertInput[], recent: ReadonlySet<string>, base: string): Alert[] {
+  const out: Alert[] = [];
+  const line = (i: EventAlertInput["items"][number]) => `• ${link(base, `/item/${i.itemId}`, i.name)}${i.min !== null ? ` · ${formatMoney(i.min)}` : ""}`;
+  for (const e of events) {
+    if (e.phase === "soon" && e.daysUntil >= 13 && e.daysUntil <= 14) {
+      const buys = e.items.filter((i) => i.action === "buy");
+      const key = `event:${e.slug}:${e.starts}:buy`;
+      if (buys.length === 0 || recent.has(key)) continue;
+      out.push({
+        key,
+        kind: "event",
+        html: [
+          `📅 <b>${esc(e.name)}</b> en ${e.daysUntil} días`,
+          "Aún a precio normal, buen momento para comprar:",
+          ...buys.map(line),
+          link(base, "/deals?tab=events", "Ver el evento"),
+        ].join("\n"),
+      });
+    }
+    if (e.phase === "during" && e.daysSinceStart <= 1 && e.items.length > 0) {
+      const key = `event:${e.slug}:${e.starts}:sell`;
+      if (recent.has(key)) continue;
+      out.push({
+        key,
+        kind: "event",
+        html: [
+          `🎉 <b>${esc(e.name)}</b> ha empezado (quedan ${e.daysLeft} días)`,
+          "Es cuando más se piden; si tienes, vende:",
+          ...e.items.map(line),
+          link(base, "/deals?tab=events", "Ver el evento"),
+        ].join("\n"),
+      });
+    }
+  }
+  return out;
 }
 
 /** Fecha y hora en Polonia. */

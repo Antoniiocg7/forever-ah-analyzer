@@ -3,6 +3,8 @@ import { categorize, gameContext, investAdvice } from "../calendar";
 import { calendarEvents, dealSettings, flipCandidates, latestRows, marketableItems, itemsBasic, recentResets } from "../deals-queries";
 import { pick } from "../lang";
 import { scoreDeal } from "../pricing/deals";
+import { eventAdvice } from "../seasonal";
+import { seasonalEvents } from "../seasonal-queries";
 import { buildPlan } from "../professions/plan";
 import { economySettings, marketData, recipesFor } from "../professions/queries";
 import { hoursSinceLastIngest, trackedHouses } from "../queries";
@@ -12,6 +14,7 @@ import {
   DEFAULT_ALERTS,
   dealAlerts,
   digestHtml,
+  eventAlerts,
   digestKeyDue,
   levelingAlerts,
   resetAlerts,
@@ -48,7 +51,7 @@ export async function alertConfig(db: SupabaseClient): Promise<{ settings: Alert
 
 /** Claves enviadas recientemente, respetando el tiempo de espera de cada tipo. */
 async function recentKeys(db: SupabaseClient, now: Date): Promise<Set<string>> {
-  const since = new Date(now.getTime() - 48 * 3600 * 1000).toISOString();
+  const since = new Date(now.getTime() - 72 * 3600 * 1000).toISOString();
   const rows = await must(db.from("alerts_sent").select("key, kind, sent_at").gte("sent_at", since).not("key", "is", null));
   const out = new Set<string>();
   for (const r of rows ?? []) {
@@ -83,6 +86,32 @@ async function levelingResults(houseId: number, faction: string, s: AlertSetting
     });
   }
   return out;
+}
+
+/** Eventos de temporada con el consejo de cada objeto, para las alertas. */
+async function seasonalAlertInputs(houseId: number, s: AlertSettings, now: Date) {
+  const events = (await seasonalEvents(now.getTime())).filter((e) => e.timing && (e.timing.phase === "soon" || e.timing.phase === "during"));
+  const ids = [...new Set(events.flatMap((e) => e.items.map((i) => i.item_id)))];
+  const [rows, basics] = await Promise.all([latestRows(houseId, ids), itemsBasic(ids)]);
+  return events.map((e) => ({
+    slug: e.slug,
+    name: e.name,
+    starts: e.timing!.occ.starts,
+    phase: e.timing!.phase,
+    daysUntil: e.timing!.daysUntil,
+    daysLeft: e.timing!.daysLeft,
+    daysSinceStart: Math.floor((now.getTime() - Date.parse(`${e.timing!.occ.starts}T00:00:00Z`)) / 86_400_000),
+    items: e.items.map((i) => {
+      const r = rows.get(i.item_id);
+      const b = r ?? basics.get(i.item_id);
+      return {
+        itemId: i.item_id,
+        name: pick(b?.name_en, b?.name_es, s.lang) ?? `#${i.item_id}`,
+        min: r?.min_buyout ?? null,
+        action: eventAdvice(e.timing!, { min: r?.min_buyout ?? null, market7d: r?.market_7d ?? r?.p15_market ?? null }, null).action,
+      };
+    }),
+  }));
 }
 
 export type AlertRun = { sent: number; skipped?: string; errors: string[] };
@@ -160,6 +189,7 @@ export async function runAlerts(db: SupabaseClient, now = new Date()): Promise<A
     ...dealAlerts(deals, s, recent, PUBLIC_URL),
     ...levelingAlerts(leveling, recent, PUBLIC_URL),
     ...resetAlerts(resets, s, recent, PUBLIC_URL),
+    ...(await seasonalAlertInputs(house.id, s, now).then((ev) => eventAlerts(ev, recent, PUBLIC_URL))),
   ];
 
   const digestKey = digestKeyDue(now, s.dailyHour, recent);

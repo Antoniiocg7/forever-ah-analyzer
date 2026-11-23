@@ -25,7 +25,7 @@ const MESSAGES: Record<string, { text: string; ok: boolean }> = {
   "error-telegram": { text: "Telegram rechazó el mensaje. Revisa el token o vuelve a conectar el chat.", ok: false },
 };
 
-const KIND: Record<string, string> = { deal: "Chollo", watch: "Seguimiento", leveling: "Profesión", reset: "Reset de otro", digest: "Resumen", test: "Prueba" };
+const KIND: Record<string, string> = { deal: "Chollo", watch: "Seguimiento", leveling: "Profesión", reset: "Reset de otro", event: "Evento", digest: "Resumen", test: "Prueba" };
 
 export default function Page({ searchParams }: PageProps<"/alerts">) {
   return (

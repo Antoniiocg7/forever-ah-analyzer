@@ -31,6 +31,10 @@ import { nameLang } from "@/lib/lang-server";
 import { formatMoney, parseMoney } from "@/lib/money";
 import { ACTIVITY_CLASS, ACTIVITY_LABEL } from "@/lib/pricing/activity";
 import { scoreDeal } from "@/lib/pricing/deals";
+import { adminTokenRequired } from "@/lib/admin";
+import { eventAdvice } from "@/lib/seasonal";
+import { pastUplifts, seasonalEvents, type SeasonalEvent } from "@/lib/seasonal-queries";
+import { addEventDate, addEventItem, confirmEventItem, removeEventItem } from "./event-actions";
 import { DEFAULT_RESET } from "@/lib/pricing/reset";
 import { trackedHouses } from "@/lib/queries";
 import type { LatestPriceRow } from "@/lib/supabase";
@@ -51,6 +55,10 @@ const TABS = {
   vendor: {
     label: "Comprar y vender al NPC",
     desc: "Objetos que en la subasta cuestan menos de lo que te paga un vendedor del juego. Ganancia segura, sin comisión ni depósito.",
+  },
+  events: {
+    label: "Eventos",
+    desc: "Festividades y la Feria de la Luna Negra: qué objetos piden sus misiones y cuándo comprarlos (antes) y venderlos (durante).",
   },
   invest: {
     label: "Guardar para raids",
@@ -118,6 +126,7 @@ async function Deals({ searchParams }: Pick<PageProps<"/deals">, "searchParams">
       {tab === "reset" && <ResetList houseId={house.id} faction={house.faction} budget={budget} budgetParam={budgetParam} kind={kind} />}
       {tab === "others" && <OthersList houseId={house.id} />}
       {tab === "vendor" && <VendorList houseId={house.id} />}
+      {tab === "events" && <EventsList houseId={house.id} msg={typeof sp.msg === "string" ? sp.msg : undefined} />}
       {tab === "invest" && <InvestList houseId={house.id} />}
     </div>
   );
@@ -416,6 +425,198 @@ async function OthersList({ houseId }: { houseId: number }) {
         </p>
       </div>
     </>
+  );
+}
+
+const EVENT_MSG: Record<string, { text: string; ok: boolean }> = {
+  ok: { text: "Guardado.", ok: true },
+  quitado: { text: "Objeto quitado del evento.", ok: true },
+  token: { text: "La contraseña de administración no es correcta.", ok: false },
+  invalid: { text: "Algún dato no es válido.", ok: false },
+  "no-item": { text: "No encuentro ese objeto: pon su ID o su nombre exacto (en inglés o español).", ok: false },
+};
+
+const fmtDate = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+
+async function EventsList({ houseId, msg }: { houseId: number; msg?: string }) {
+  const lang = await nameLang();
+  const events = await seasonalEvents();
+  const ids = [...new Set(events.flatMap((e) => e.items.map((i) => i.item_id)))];
+  const [latest, uplifts] = await Promise.all([latestRows(houseId, ids), pastUplifts(houseId, events)]);
+  const basics = await itemsBasic(ids.filter((id) => !latest.has(id)));
+  const needToken = adminTokenRequired();
+  const m = msg ? EVENT_MSG[msg] : undefined;
+  const tokenField = needToken && <input name="token" type="password" required placeholder="Contraseña" className="input" autoComplete="current-password" aria-label="Contraseña de administración" />;
+
+  return (
+    <>
+      {m && <p className={`card text-sm ${m.ok ? "text-good" : "text-bad"}`}>{m.text}</p>}
+      <p className="text-xs text-muted">
+        Fechas de wowcalc.net y foreverdb.net (aprox.: Blizzard no ha publicado la hora del reino de Forever). Las misiones vienen de Classic:
+        las marcadas <span className="text-gold">sin confirmar</span> hay que verlas en el juego. Puedes añadir objetos y fechas en cada
+        evento.
+      </p>
+      {events.map((e) => (
+        <EventCard key={e.id} e={e} houseId={houseId} lang={lang} latest={latest} basics={basics} uplifts={uplifts} tokenField={tokenField} />
+      ))}
+    </>
+  );
+}
+
+function EventCard({
+  e,
+  houseId,
+  lang,
+  latest,
+  basics,
+  uplifts,
+  tokenField,
+}: {
+  e: SeasonalEvent;
+  houseId: number;
+  lang: Lang;
+  latest: Map<number, LatestPriceRow>;
+  basics: Map<number, { name_en: string | null; name_es: string | null; quality: string | null; icon_url: string | null }>;
+  uplifts: Map<string, number>;
+  tokenField: React.ReactNode;
+}) {
+  const t = e.timing;
+  const when = !t
+    ? "sin fechas"
+    : t.phase === "during"
+      ? `en curso · quedan ${t.daysLeft} ${t.daysLeft === 1 ? "día" : "días"}`
+      : t.phase === "past"
+        ? "ya pasó"
+        : `en ${t.daysUntil} ${t.daysUntil === 1 ? "día" : "días"}`;
+  const whenClass = t?.phase === "during" ? "text-good" : t?.phase === "soon" ? "text-gold" : "text-muted";
+  const otherDates = e.dates.filter((d) => d.starts !== t?.occ.starts && d.ends >= new Date().toISOString().slice(0, 10));
+
+  return (
+    <section id={`evento-${e.id}`} className={`card space-y-3 ${t?.phase === "during" || t?.phase === "soon" ? "border-gold/50" : ""}`}>
+      <div>
+        <h2 className="flex flex-wrap items-baseline justify-between gap-x-3 font-medium">
+          {e.name}
+          <span className={`text-sm font-normal ${whenClass}`}>{when}</span>
+        </h2>
+        {t && (
+          <p className="text-xs text-muted">
+            {fmtDate(t.occ.starts)}
+            {t.occ.ends !== t.occ.starts && ` – ${fmtDate(t.occ.ends)}`}
+            {t.occ.place && ` · ${t.occ.place}`}
+            {otherDates.length > 0 && ` · después: ${otherDates.map((d) => fmtDate(d.starts)).join(", ")}`}
+          </p>
+        )}
+        {e.notes && <p className="mt-1 text-xs text-muted">{e.notes}</p>}
+      </div>
+
+      {e.items.length === 0 ? (
+        <p className="text-sm text-muted">Aún no hay objetos apuntados para este evento.</p>
+      ) : (
+        <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line text-sm">
+          {e.items.map((it) => {
+            const row = latest.get(it.item_id);
+            const info = row ?? basics.get(it.item_id);
+            const up = uplifts.get(`${e.id}:${it.item_id}`) ?? null;
+            const advice = t ? eventAdvice(t, { min: row?.min_buyout ?? null, market7d: row?.market_7d ?? row?.p15_market ?? null }, up) : null;
+            return (
+              <li key={it.item_id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                <Link href={`/item/${it.item_id}?house=${houseId}`} className="flex min-w-0 items-center gap-2">
+                  <ItemIcon src={info?.icon_url ?? null} quality={info?.quality ?? null} size={24} />
+                  <span className="min-w-0">
+                    <span className={`block truncate q-${info?.quality ?? "COMMON"}`}>
+                      {it.qty ? `${it.qty} × ` : ""}
+                      {pick(info?.name_en, info?.name_es, lang) ?? `Objeto #${it.item_id}`}
+                    </span>
+                    <span className="block text-[11px] text-muted">
+                      {it.note}
+                      {!it.confirmed && <span className="text-gold"> · sin confirmar</span>}
+                      {up !== null && ` · la última vez ${up >= 0 ? "+" : "−"}${Math.abs(Math.round(up * 100))}%`}
+                    </span>
+                    {advice && <span className={`block text-[11px] ${advice.className}`}>{advice.label}</span>}
+                  </span>
+                </Link>
+                <span className="shrink-0 text-right font-mono">
+                  {row ? formatMoney(row.min_buyout) : <span className="text-xs text-muted">no hay</span>}
+                  {row?.market_7d != null && <span className="block text-[11px] text-muted">normal {formatMoney(row.market_7d)}</span>}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <details className="text-sm">
+        <summary className="py-1 text-gold">✎ Editar objetos y fechas</summary>
+        <div className="mt-2 space-y-4">
+          <form action={addEventItem} className="space-y-2">
+            <input type="hidden" name="eventId" value={e.id} />
+            <p className="text-xs text-muted">Añadir (o cambiar) un objeto que pide el evento:</p>
+            <input name="item" required className="input" placeholder="ID o nombre exacto (p. ej. Small Egg)" aria-label="Objeto" />
+            <div className="grid grid-cols-[5rem_1fr] gap-2">
+              <input name="qty" type="number" min={1} inputMode="numeric" className="input px-2" placeholder="Cant." aria-label="Cantidad que pide la misión" />
+              <input name="note" className="input" placeholder="Para qué (p. ej. galletas de jengibre)" aria-label="Nota" />
+            </div>
+            <label className="flex items-center gap-2 text-xs text-muted">
+              <input type="checkbox" name="confirmed" className="h-4 w-4 accent-[#e0b354]" />
+              Lo he visto en el juego (confirmado)
+            </label>
+            {tokenField}
+            <button className="btn w-full sm:w-auto">Guardar objeto</button>
+          </form>
+
+          {e.items.length > 0 && (
+            <ul className="space-y-1.5 text-xs">
+              {e.items.map((it) => {
+                const info = latest.get(it.item_id) ?? basics.get(it.item_id);
+                return (
+                  <li key={it.item_id} className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate">{pick(info?.name_en, info?.name_es, lang) ?? `#${it.item_id}`}</span>
+                    <span className="flex shrink-0 gap-1.5">
+                      <form action={confirmEventItem}>
+                        <input type="hidden" name="eventId" value={e.id} />
+                        <input type="hidden" name="itemId" value={it.item_id} />
+                        <input type="hidden" name="confirmed" value={it.confirmed ? "0" : "1"} />
+                        {tokenField}
+                        <button className="min-h-8 rounded border border-line px-2 text-muted hover:text-fg">{it.confirmed ? "Desconfirmar" : "✓ Confirmar"}</button>
+                      </form>
+                      <form action={removeEventItem}>
+                        <input type="hidden" name="eventId" value={e.id} />
+                        <input type="hidden" name="itemId" value={it.item_id} />
+                        {tokenField}
+                        <button className="min-h-8 rounded border border-line px-2 text-bad">Quitar</button>
+                      </form>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <form action={addEventDate} className="space-y-2">
+            <input type="hidden" name="eventId" value={e.id} />
+            <p className="text-xs text-muted">Añadir fechas (p. ej. la Feria del mes que viene):</p>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs text-muted">
+                Empieza
+                <input name="starts" type="date" required className="input mt-1 px-2" />
+              </label>
+              <label className="text-xs text-muted">
+                Termina
+                <input name="ends" type="date" className="input mt-1 px-2" />
+              </label>
+            </div>
+            <input name="place" className="input" placeholder="Lugar (opcional)" aria-label="Lugar" />
+            {tokenField}
+            <button className="btn w-full sm:w-auto">Guardar fechas</button>
+          </form>
+          {e.source && (
+            <a href={e.source} target="_blank" rel="noopener noreferrer" className="inline-block text-xs text-muted underline">
+              Fuente de las fechas ↗
+            </a>
+          )}
+        </div>
+      </details>
+    </section>
   );
 }
 

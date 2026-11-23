@@ -69,6 +69,10 @@ const TERMS: { term: string; text: ReactNode }[] = [
     term: "Reset de otro jugador",
     text: "Se detecta cuando, de una hora a otra, alguien compra todo lo barato de un objeto y el mínimo salta más de un 25% (y más de un 15% sobre su precio normal). Si tienes ese objeto, es momento de vender. Se sigue durante 24 h: “aguantó” o “se cayó”, y con ese historial sabes en qué objetos merece la pena resetear tú.",
   },
+  {
+    term: "Eventos de temporada",
+    text: "Festividades (Winter Veil, Hallow's End…) y la Feria de la Luna Negra (cada mes). Sus misiones piden objetos concretos que suben de precio: se compran en las 3 semanas antes, mientras sigan a precio normal, y se venden durante el evento. Cuando haya historial de una vez anterior, se muestra cuánto subió.",
+  },
   { term: "Reposición", text: "ESTIMACIÓN de unidades nuevas que se publican al día (incluye las que se cancelan y se vuelven a poner). Si se repone tanto como se vende, un reset no aguanta." },
   { term: "Profundidad", text: "Cuántas unidades puedes comprar antes de que el precio deje de ser una ganga (≤ 85% de la mediana)." },
   {
