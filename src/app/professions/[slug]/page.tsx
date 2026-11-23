@@ -3,6 +3,8 @@ import { Suspense } from "react";
 import { Hint } from "@/components/Hint";
 import { HouseTabs } from "@/components/HouseTabs";
 import { ItemIcon } from "@/components/ItemIcon";
+import { Money } from "@/components/Money";
+import { PageIntro } from "@/components/PageIntro";
 import { Loading, NoHousesNotice, NoRecipesNotice, SetupNotice } from "@/components/notices";
 import { adminTokenRequired } from "@/lib/admin";
 import { isConfigured } from "@/lib/env";
@@ -115,28 +117,36 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
     if (over.fiables ?? reliable) p.set("fiables", "1");
     return `/professions/${slug}?${p}`;
   };
-  const chip = (active: boolean) => `min-h-9 shrink-0 rounded-full border px-3 py-1.5 ${active ? "border-gold text-gold" : "border-line text-muted"}`;
+  const chip = (active: boolean) => (active ? "chip chip-active" : "chip");
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-        <h1 className="text-xl font-semibold">{pick(recipes[0].profession, recipes[0].profession_es, lang)}</h1>
-        <p className="mt-1 text-sm text-muted">Coste de fabricar cada receta y lo que ganas vendiendo el resultado.</p>
-        <p className="text-xs text-muted">
-          {recipes.length.toLocaleString("es-ES")} recetas · {profitable} con beneficio ahora
-          {updatedAt && ` · precios de ${new Date(updatedAt).toLocaleString("es-ES", { timeZone: "Europe/Warsaw", dateStyle: "short", timeStyle: "short" })}`}
-        </p>
-        </div>
-        <Link
-          href={`/professions/${slug}/plan?house=${house.id}`}
-          className="btn shrink-0 flex-col text-sm leading-tight"
-          title="Calcula la forma más barata de subir de tu nivel actual al que quieras, con la lista de la compra"
-        >
-          Planificar subida
-          <span className="text-[11px] font-normal opacity-80">ruta más barata</span>
-        </Link>
-      </div>
+    <div className="space-y-5">
+      <PageIntro
+        eyebrow="Profesión"
+        title={pick(recipes[0].profession, recipes[0].profession_es, lang)}
+        summary={
+          <>
+            Coste de fabricar cada receta y lo que ganas vendiendo el resultado.{" "}
+            <span className="text-faint">
+              {recipes.length.toLocaleString("es-ES")} recetas · <span className="text-good">{profitable} con beneficio</span>
+              {updatedAt && ` · ${new Date(updatedAt).toLocaleString("es-ES", { timeZone: "Europe/Warsaw", dateStyle: "short", timeStyle: "short" })}`}
+            </span>
+          </>
+        }
+        actions={
+          <Link
+            href={`/professions/${slug}/plan?house=${house.id}`}
+            className="btn text-sm"
+            title="Calcula la forma más barata de subir de tu nivel actual al que quieras, con la lista de la compra"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <path d="M3 17l6-6 4 4 8-8M14 7h7v7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="hidden sm:inline">Planificar subida</span>
+            <span className="sm:hidden">Subir</span>
+          </Link>
+        }
+      />
 
       <form action={`/professions/${slug}`} className="flex gap-2">
         <input type="hidden" name="house" value={house.id} />
@@ -148,7 +158,7 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
 
       <HouseTabs houses={houses} current={house.id} hrefFor={(id) => href({ house: id })} />
 
-      <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 text-sm">
+      <div className="scroller text-sm">
         <Link
           href={href({ fiables: !reliable })}
           className={chip(reliable)}
@@ -186,7 +196,7 @@ async function Recipes({ params, searchParams }: PageProps<"/professions/[slug]"
       {rows.length === 0 ? (
         <p className="card text-sm text-muted">{q ? `Ninguna receta coincide con “${q}”.` : "Ninguna receta cumple el filtro ahora mismo."}</p>
       ) : (
-        <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+        <ul className="list">
           {rows.map(({ recipe, calc }) => (
             <li key={recipe.id}>
               <RecipeItem
@@ -262,20 +272,19 @@ function RecipeItem({
 
   return (
     <details className="group">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 active:bg-surface-2">
+      <summary className="row flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <ItemIcon src={product?.icon} quality={product?.quality} />
           <div className="min-w-0">
-            <p className={`truncate font-medium q-${product?.quality ?? "COMMON"}`}>
+            <p className={`line-clamp-2 leading-snug font-medium q-${product?.quality ?? "COMMON"}`}>
               {pick(recipe.name_en, recipe.name_es, lang)}
               {qty !== 1 && <span className="text-muted"> ×{qty}</span>}
             </p>
-            <p className="flex items-center gap-2 truncate text-xs text-muted">
-              {badge && <span className={`shrink-0 rounded border px-1 ${badge.className}`}>{badge.label}</span>}
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+              {badge && <span className={`badge ${badge.className}`}>{badge.label}</span>}
               {calc.product?.soldPerDay != null && (
-                <span className="shrink-0 font-mono text-fg">
-                  ≈{calc.product.soldPerDay.toLocaleString("es-ES")}
-                  <span className="font-sans text-muted"> vendidos/día</span>
+                <span>
+                  <span className="font-mono text-fg tabular-nums">≈{calc.product.soldPerDay.toLocaleString("es-ES")}</span>/día
                 </span>
               )}
               <span className="truncate">{meta}</span>
@@ -287,7 +296,9 @@ function RecipeItem({
             {calc.profit === null ? "—" : `${calc.profit > 0 ? "+" : ""}${formatMoney(calc.profit)}`}
             {calc.margin !== null && <span className="text-xs"> ({Math.round(calc.margin * 100)}%)</span>}
           </p>
-          <p className="text-xs text-muted">coste {calc.cost === null ? (calc.knownCost > 0 ? `> ${formatMoney(calc.knownCost)}` : "—") : formatMoney(calc.cost)}</p>
+          <p className="mt-0.5 text-[11px] text-muted">
+            coste {calc.cost === null ? (calc.knownCost > 0 ? <>&gt; <Money value={calc.knownCost} /></> : "—") : <Money value={calc.cost} />}
+          </p>
         </div>
       </summary>
 
@@ -416,7 +427,7 @@ function SkillEditor({
         <div className="flex gap-2">
           <button className="btn flex-1">Guardar niveles</button>
           {recipe.skill_source === "manual" && (
-            <button name="reset" value="1" formNoValidate className="min-h-11 rounded-lg border border-line px-3 text-muted">
+            <button name="reset" value="1" formNoValidate className="btn-ghost min-h-11 text-muted">
               Quitar corrección
             </button>
           )}

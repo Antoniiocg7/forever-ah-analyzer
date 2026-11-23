@@ -50,15 +50,15 @@ const LINKS = [
   },
 ];
 
-function Icon({ d }: { d: string }) {
+function Icon({ d, className = "" }: { d: string; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={className}>
       <path d={d} />
     </svg>
   );
 }
 
-/** Enlaces en la cabecera (escritorio). */
+/** Enlaces en la cabecera (tableta y escritorio). */
 export function TopNav() {
   return <TopNavView path={usePathname()} />;
 }
@@ -74,31 +74,49 @@ export const BottomNavFallback = () => <BottomNavView path="" />;
 
 function TopNavView({ path }: { path: string }) {
   return (
-    <div className="hidden gap-5 text-sm sm:flex">
-      {LINKS.map((l) => (
-        <Link key={l.href} href={l.href} title={l.hint} className={`py-1 ${l.match(path) ? "text-fg" : "text-muted hover:text-fg"}`} aria-current={l.match(path) ? "page" : undefined}>
-          {l.label}
-        </Link>
-      ))}
-    </div>
+    <nav className="hidden items-center gap-0.5 rounded-full border border-line bg-surface/70 p-1 text-sm md:flex" aria-label="Apartados">
+      {LINKS.map((l) => {
+        const active = l.match(path);
+        return (
+          <Link
+            key={l.href}
+            href={l.href}
+            title={l.hint}
+            aria-current={active ? "page" : undefined}
+            aria-label={l.label}
+            className={`flex h-8 items-center gap-1.5 rounded-full px-2.5 lg:px-3 transition-colors ${
+              active ? "bg-surface-3 text-gold shadow-sm" : "text-muted hover:bg-surface-2 hover:text-fg"
+            }`}
+          >
+            <Icon d={l.icon} className="h-4 w-4" />
+            <span className="hidden lg:inline">{l.label}</span>
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 
 function BottomNavView({ path }: { path: string }) {
+  const links = LINKS.filter((l) => !("desktopOnly" in l));
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
-      <div className="mx-auto grid max-w-md grid-cols-5">
-        {LINKS.filter((l) => !("desktopOnly" in l)).map((l) => {
+    <nav
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-line/70 bg-bg/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
+      aria-label="Apartados"
+    >
+      <div className="mx-auto grid max-w-md" style={{ gridTemplateColumns: `repeat(${links.length}, minmax(0, 1fr))` }}>
+        {links.map((l) => {
           const active = l.match(path);
           return (
             <Link
               key={l.href}
               href={l.href}
-              title={l.hint}
-              className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] ${active ? "text-gold" : "text-muted"}`}
               aria-current={active ? "page" : undefined}
+              className={`group flex min-h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium ${active ? "text-gold" : "text-muted"}`}
             >
-              <Icon d={l.icon} />
+              <span className={`grid h-7 w-12 place-items-center rounded-full transition-colors ${active ? "bg-gold/15" : "group-active:bg-surface-2"}`}>
+                <Icon d={l.icon} />
+              </span>
               {l.label}
             </Link>
           );

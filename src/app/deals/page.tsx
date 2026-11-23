@@ -71,6 +71,7 @@ export default function Page({ searchParams }: PageProps<"/deals">) {
   return (
     <div className="space-y-4">
       <PageIntro
+        eyebrow="Oportunidades"
         title="Chollos"
         summary="Qué comprar ahora para ganar oro. Las compras las haces tú a mano en el juego."
         steps={[
@@ -109,12 +110,12 @@ async function Deals({ searchParams }: Pick<PageProps<"/deals">, "searchParams">
   const kind: ResetKind = typeof sp.tipo === "string" && sp.tipo in RESET_KINDS ? (sp.tipo as ResetKind) : "materiales";
   const href = (over: { tab?: Tab; house?: number }) =>
     `/deals?house=${over.house ?? house.id}&tab=${over.tab ?? tab}${budgetParam ? `&presupuesto=${encodeURIComponent(budgetParam)}` : ""}`;
-  const chip = (active: boolean) => `min-h-9 shrink-0 rounded-full border px-3 py-1.5 ${active ? "border-gold text-gold" : "border-line text-muted"}`;
+  const chip = (active: boolean) => (active ? "chip chip-active" : "chip");
 
   return (
     <div className="space-y-4">
       <HouseTabs houses={houses} current={house.id} hrefFor={(id) => href({ house: id })} />
-      <div className="-mx-4 flex gap-2 overflow-x-auto border-b border-line px-4 pb-3 text-sm">
+      <div className="scroller text-sm">
         {(Object.keys(TABS) as Tab[]).map((t) => (
           <Link key={t} href={href({ tab: t })} className={chip(t === tab)} title={TABS[t].desc} aria-current={t === tab ? "page" : undefined}>
             {TABS[t].label}
@@ -169,10 +170,10 @@ async function FlipList({ houseId, faction }: { houseId: number; faction: string
           activar la descarga horaria, vuelve más tarde.
         </p>
       ) : (
-        <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+        <ul className="list">
           {rows.map(({ r, deal }) => (
             <li key={r.item_id}>
-              <Link href={`/item/${r.item_id}?house=${houseId}`} className="block space-y-1 px-4 py-3 active:bg-surface-2">
+              <Link href={`/item/${r.item_id}?house=${houseId}`} className="block space-y-1 px-4 py-3 row">
                 <div className="flex items-center justify-between gap-3">
                   <ItemTitle row={r} lang={lang} />
                   <div className="shrink-0 text-right font-mono text-sm" title="Ganancia total si compras todas las unidades baratas y las revendes a su precio normal">
@@ -254,7 +255,7 @@ async function ResetList({
             key={k}
             href={kindHref(k)}
             aria-current={k === kind ? "true" : undefined}
-            className={`min-h-9 rounded-full border px-3 py-1.5 ${k === kind ? "border-gold text-gold" : "border-line text-muted hover:text-fg"}`}
+            className={k === kind ? "chip chip-active" : "chip"}
           >
             {RESET_KINDS[k].label}
           </Link>
@@ -269,10 +270,10 @@ async function ResetList({
       {rows.length === 0 ? (
         <p className="card text-sm text-muted">Con este presupuesto no hay ningún reset que salga a cuenta ahora mismo.</p>
       ) : (
-        <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+        <ul className="list">
           {rows.map(({ row: r, reset: x }) => (
             <li key={r.item_id}>
-              <Link href={`/item/${r.item_id}?house=${houseId}`} className="block space-y-1.5 px-4 py-3 active:bg-surface-2">
+              <Link href={`/item/${r.item_id}?house=${houseId}`} className="block space-y-1.5 px-4 py-3 row">
                 <div className="flex items-center justify-between gap-3">
                   <ItemTitle row={r} lang={lang} />
                   <div className="shrink-0 text-right font-mono text-sm" title="Beneficio esperado con el modelo (ventas, subida de precio y reposición) · si lo vendieras todo a tu precio">
@@ -374,14 +375,14 @@ async function OthersList({ houseId }: { houseId: number }) {
               De los {closed.length} resets ya cerrados, <span className={held >= closed.length / 2 ? "text-good" : "text-bad"}>{held} aguantaron 24 h</span>.
             </p>
           )}
-          <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+          <ul className="list">
             {events.map((e) => {
               const now = latest.get(e.item_id);
               const info = now ?? basics.get(e.item_id);
               const minNow = now?.min_buyout ?? null;
               return (
                 <li key={e.id}>
-                  <Link href={`/item/${e.item_id}?house=${houseId}`} className="block space-y-1.5 px-4 py-3 active:bg-surface-2">
+                  <Link href={`/item/${e.item_id}?house=${houseId}`} className="block space-y-1.5 px-4 py-3 row">
                     <div className="flex items-center justify-between gap-3">
                       <span className="flex min-w-0 items-center gap-3">
                         <ItemIcon src={info?.icon_url ?? null} quality={info?.quality ?? null} />
@@ -628,10 +629,10 @@ async function VendorList({ houseId }: { houseId: number }) {
       {rows.length === 0 ? (
         <p className="card text-sm text-muted">Ahora mismo no hay nada en la subasta por debajo de lo que paga el vendedor.</p>
       ) : (
-        <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+        <ul className="list">
           {rows.map((r) => (
             <li key={r.item_id}>
-              <Link href={`/item/${r.item_id}?house=${houseId}`} className="flex items-center justify-between gap-3 px-4 py-3 active:bg-surface-2">
+              <Link href={`/item/${r.item_id}?house=${houseId}`} className="flex items-center justify-between gap-3 px-4 py-3 row">
                 <div className="min-w-0">
                   <ItemTitle row={r} lang={lang} />
                   <p className="mt-1 text-xs text-muted">
@@ -684,10 +685,10 @@ async function InvestList({ houseId }: { houseId: number }) {
         return (
           <section key={cat} className="space-y-2">
             <h2 className="text-sm font-medium text-muted">{CATEGORY_LABEL[cat]}</h2>
-            <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+            <ul className="list">
               {list.slice(0, 30).map(({ r, advice }) => (
                 <li key={r.item_id}>
-                  <Link href={`/item/${r.item_id}?house=${houseId}`} className="flex items-center justify-between gap-3 px-4 py-3 active:bg-surface-2">
+                  <Link href={`/item/${r.item_id}?house=${houseId}`} className="flex items-center justify-between gap-3 px-4 py-3 row">
                     <div className="min-w-0">
                       <ItemTitle row={r} lang={lang} />
                       <p className="mt-1 text-xs text-muted">

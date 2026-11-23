@@ -97,13 +97,14 @@ export default function Page() {
   return (
     <div className="space-y-6">
       <PageIntro
+        eyebrow="Guía"
         title="Ayuda"
         summary="Para qué sirve cada apartado y qué significa cada número. Las compras siempre las haces tú a mano en el juego: esta web solo te dice qué conviene."
       />
 
       <section className="space-y-2">
         <h2 className="text-sm font-medium text-muted">Apartados</h2>
-        <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface text-sm">
+        <ul className="list text-sm">
           {SECTIONS.map((s) => (
             <li key={s.id} id={s.id} className="px-4 py-3">
               <p className="font-medium">
@@ -123,7 +124,7 @@ export default function Page() {
 
       <section className="space-y-2">
         <h2 className="text-sm font-medium text-muted">Glosario</h2>
-        <dl className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface text-sm">
+        <dl className="list text-sm">
           {TERMS.map((t) => (
             <div key={t.term} className="px-4 py-3">
               <dt className="font-medium">{t.term}</dt>

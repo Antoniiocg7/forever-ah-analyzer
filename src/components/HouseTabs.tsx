@@ -12,7 +12,7 @@ const FACTION: Record<string, { name: string; tip: string }> = {
 export function HouseTabs({ houses, current, hrefFor }: { houses: HouseRow[]; current: number; hrefFor: (houseId: number) => string }) {
   if (houses.length < 2) return null;
   return (
-    <div className="flex items-center gap-2 overflow-x-auto">
+    <div className="scroller">
       <span className="flex shrink-0 items-center gap-1 text-xs text-muted">
         Subasta
         <Hint label="¿Qué subasta elijo?">
@@ -28,8 +28,9 @@ export function HouseTabs({ houses, current, hrefFor }: { houses: HouseRow[]; cu
             href={hrefFor(h.id)}
             title={f?.tip}
             aria-current={h.id === current ? "true" : undefined}
-            className={`min-h-9 shrink-0 rounded-full border px-3 py-1.5 text-sm ${h.id === current ? "border-gold text-gold" : "border-line text-muted hover:text-fg"}`}
+            className="chip"
           >
+            <span className={`h-2 w-2 rounded-full ${h.faction === "alliance" ? "bg-info" : h.faction === "horde" ? "bg-bad" : "bg-gold"}`} aria-hidden />
             {f?.name ?? h.label ?? h.name}
           </Link>
         );

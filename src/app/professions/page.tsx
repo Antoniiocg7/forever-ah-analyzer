@@ -14,6 +14,7 @@ export default function Page({ searchParams }: PageProps<"/professions">) {
   return (
     <div className="space-y-4">
       <PageIntro
+        eyebrow="Fabricación"
         title="Profesiones"
         summary="Todas las recetas de cada profesión, las tengas aprendidas o no, con lo que cuesta fabricarlas y lo que ganas vendiéndolas."
         steps={[
@@ -73,7 +74,7 @@ async function Professions({ searchParams }: Pick<PageProps<"/professions">, "se
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {sorted.map((p) => (
           <li key={p.slug}>
-            <Link href={`/professions/${p.slug}`} className={`card block active:bg-surface-2 ${mine.includes(p.slug) ? "border-gold" : ""}`}>
+            <Link href={`/professions/${p.slug}`} className={`card block row ${mine.includes(p.slug) ? "border-gold" : ""}`}>
               <p className="font-medium">{p.name}</p>
               <p className="mt-1 text-xs text-muted">
                 {p.recipes.toLocaleString("es-ES")} recetas{mine.includes(p.slug) && " · tuya"}

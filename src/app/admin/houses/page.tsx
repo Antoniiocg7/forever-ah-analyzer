@@ -27,10 +27,11 @@ export default function Page({ searchParams }: PageProps<"/admin/houses">) {
   return (
     <div className="space-y-4">
       <PageIntro
+        eyebrow="Configuración"
         title="Ajustes"
         summary="Qué casas de subastas se siguen y los avisos al móvil. Normalmente solo se toca una vez."
       />
-      <Link href="/alerts" className="card flex items-center justify-between gap-3 active:bg-surface-2">
+      <Link href="/alerts" className="card flex items-center justify-between gap-3 row">
         <span>
           <span className="block font-medium">Alertas de Telegram</span>
           <span className="block text-sm text-muted">Avisos al móvil de chollos, precios que vigilas y buenos momentos para subir profesiones.</span>
@@ -39,7 +40,7 @@ export default function Page({ searchParams }: PageProps<"/admin/houses">) {
           →
         </span>
       </Link>
-      <Link href="/ayuda" className="card flex items-center justify-between gap-3 active:bg-surface-2">
+      <Link href="/ayuda" className="card flex items-center justify-between gap-3 row">
         <span>
           <span className="block font-medium">Ayuda y glosario</span>
           <span className="block text-sm text-muted">Para qué sirve cada apartado y qué significa cada número.</span>
@@ -203,7 +204,7 @@ function GroupCard({ group, price, needToken }: { group: Group; price: Map<strin
               )}
               <button
                 title={isMarked ? "Dejar de descargar esta casa" : `Marcar esta casa como tu ${c.title} y descargar sus precios cada hora`}
-                className={`min-h-11 w-full rounded-lg border px-3 text-sm ${isMarked ? "border-gold text-gold" : "border-line text-fg active:bg-surface-2"}`}
+                className={`min-h-11 w-full rounded-lg border px-3 text-sm ${isMarked ? "border-gold text-gold" : "border-line text-fg row"}`}
               >
                 {isMarked ? `✓ Sigues esta (${c.title}) · dejar de seguir` : `Esta es mi ${c.title}`}
               </button>

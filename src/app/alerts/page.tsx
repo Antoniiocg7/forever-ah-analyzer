@@ -34,6 +34,7 @@ export default function Page({ searchParams }: PageProps<"/alerts">) {
         ← Ajustes
       </Link>
       <PageIntro
+        eyebrow="Ajustes"
         title="Alertas de Telegram"
         summary="Mensajes al móvil cuando aparece un chollo, cuando un precio que vigilas cruza tu límite o cuando es buen momento para subir una profesión."
         steps={[
@@ -172,7 +173,7 @@ async function Alerts({ searchParams }: Pick<PageProps<"/alerts">, "searchParams
         {watch.length === 0 ? (
           <p className="card text-sm text-muted">Ninguno. Añádelos desde la ficha de cualquier objeto (“Avísame cuando…”).</p>
         ) : (
-          <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface text-sm">
+          <ul className="list text-sm">
             {watch.map((w) => {
               const id = w.item_id as number;
               return (
@@ -187,7 +188,7 @@ async function Alerts({ searchParams }: Pick<PageProps<"/alerts">, "searchParams
                     <input type="hidden" name="itemId" value={id} />
                     <input type="hidden" name="back" value="/alerts" />
                     {tokenField}
-                    <button className="min-h-9 rounded-lg border border-line px-3 text-muted">Quitar</button>
+                    <button className="btn-ghost text-muted">Quitar</button>
                   </form>
                 </li>
               );
@@ -201,7 +202,7 @@ async function Alerts({ searchParams }: Pick<PageProps<"/alerts">, "searchParams
         {(sentRows.data ?? []).length === 0 ? (
           <p className="card text-sm text-muted">Todavía ninguno.</p>
         ) : (
-          <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface text-xs">
+          <ul className="list text-xs">
             {(sentRows.data ?? []).map((a) => (
               <li key={`${a.key}-${a.sent_at}`} className="px-4 py-2.5">
                 <span className="text-muted">

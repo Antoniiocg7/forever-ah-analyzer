@@ -79,6 +79,7 @@ async function Planner({ params, searchParams }: PageProps<"/professions/[slug]/
         ← {profession}
       </Link>
       <PageIntro
+        eyebrow="Planificador"
         title={`Subir ${profession}`}
         summary="Calcula qué recetas fabricar, en qué orden y qué comprar para subir de nivel gastando lo mínimo con los precios de ahora."
         steps={[
@@ -173,7 +174,7 @@ async function Planner({ params, searchParams }: PageProps<"/professions/[slug]/
                 <span className="text-bad">caro ahora</span> = si puedes, espera o recógelo tú. Si ya lo tienes en las bolsas, no lo compres.
               </Hint>
             </h2>
-            <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface text-sm">
+            <ul className="list text-sm">
               {plan.plansToBuy.map((p) => (
                 <li key={`plan-${p.recipeId}`} className="flex items-center justify-between gap-3 px-4 py-2.5">
                   <Link href={`/item/${p.itemId}?house=${house.id}`} className="flex min-w-0 items-center gap-2">
@@ -213,7 +214,7 @@ async function Planner({ params, searchParams }: PageProps<"/professions/[slug]/
             {plan.shopping.some((l) => l.via === "craft") && (
               <>
                 <h3 className="pt-2 text-xs font-medium text-muted">Fabricar tú (sus materiales ya están en la lista de arriba)</h3>
-                <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface text-sm">
+                <ul className="list text-sm">
                   {plan.shopping
                     .filter((l) => l.via === "craft")
                     .map((l) => (
@@ -244,7 +245,7 @@ async function Planner({ params, searchParams }: PageProps<"/professions/[slug]/
                 que cuesta ese tramo.
               </Hint>
             </h2>
-            <ol className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface text-sm">
+            <ol className="list text-sm">
               {plan.route.steps.map((st) => {
                 const c = plan.byId.get(st.recipeId)!;
                 const color = colorAt(c.colors, st.from);

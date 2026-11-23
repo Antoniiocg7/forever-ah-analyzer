@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import { Hint } from "@/components/Hint";
 import { HouseTabs } from "@/components/HouseTabs";
 import { ItemIcon } from "@/components/ItemIcon";
+import { Money } from "@/components/Money";
 import { Loading, NoHousesNotice, SetupNotice } from "@/components/notices";
 import { PriceChart } from "@/components/PriceChart";
 import { isConfigured } from "@/lib/env";
@@ -62,77 +63,134 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
   const soldPerDay =
     latest?.sold_per_day ?? (soldDays.length ? Math.round(soldDays.reduce((s, d) => s + (d.sold ?? 0), 0) / soldDays.length) : null);
 
-  const stats: { label: string; value: string; hint: string }[] = [
-    { label: "Más barato ahora", value: formatMoney(latest?.min_buyout), hint: "Precio por unidad de la subasta más barata en este momento: lo que pagarías si compras ya." },
-    {
-      label: "Publica a",
-      value: latest ? formatMoney(Math.max(1, (latest.real_min ?? latest.min_buyout) - 1)) : "—",
-      hint:
-        latest?.real_min != null
-          ? `Ojo: el más barato son ${latest.bait_units} ud sueltas muy por debajo (un cebo para que la gente rebaje). El precio real empieza en ${formatMoney(latest.real_min)}: publica 1c por debajo de ese, no del cebo (o compra el cebo, que está barato).`
-          : "1 cobre por debajo del más barato: así tu subasta sale la primera.",
-    },
+  const listAt = latest ? Math.max(1, (latest.real_min ?? latest.min_buyout) - 1) : null;
+  const pct = latest?.discount != null ? Math.round(-latest.discount * 100) : null;
+  const stats: { label: string; value: ReactNode; hint: string; wide?: boolean }[] = [
     {
       label: "Precio de mercado",
-      value: formatMoney(latest?.p15_market),
+      value: <Money value={latest?.p15_market} />,
       hint: "Media del 15% de unidades más baratas. Más fiable que el mínimo, que puede ser una sola subasta suelta.",
     },
     {
-      label: "Precio normal (7 días)",
-      value: formatMoney(latest?.market_7d),
-      hint: "Mediana de la última semana. Si “más barato ahora” está muy por debajo, es buen momento para comprar; si está por encima, para vender.",
-    },
-    {
       label: "En venta",
-      value: latest ? `${latest.qty.toLocaleString("es-ES")} uds · ${latest.num_auctions} subastas` : "—",
+      value: latest ? (
+        <>
+          {latest.qty.toLocaleString("es-ES")} <span className="text-xs text-muted">uds · {latest.num_auctions} subastas</span>
+        </>
+      ) : (
+        "—"
+      ),
       hint: "Unidades publicadas ahora y en cuántas subastas están repartidas. Mucho stock y pocas ventas = cuesta vender.",
     },
     {
       label: "Vendidos al día",
-      value: soldPerDay === null ? "sin datos aún" : `≈ ${soldPerDay.toLocaleString("es-ES")}`,
+      value: soldPerDay === null ? <span className="text-sm text-muted">sin datos aún</span> : `≈ ${soldPerDay.toLocaleString("es-ES")}`,
       hint: "Estimación: subastas que desaparecen antes de caducar. Blizzard no publica las ventas reales.",
     },
     {
       label: "Vendedor (NPC)",
       hint: "“Paga” es lo que te da un vendedor del juego por cada unidad. “Vende a” es lo que cuesta comprárselo a él (si lo vende).",
-      value: [item?.vendor_sold && item.vendor_buy ? `vende a ${formatMoney(item.vendor_buy)}` : null, item?.vendor_sell ? `paga ${formatMoney(item.vendor_sell)}` : null]
-        .filter(Boolean)
-        .join(" · ") || "—",
+      value:
+        item?.vendor_sell || (item?.vendor_sold && item.vendor_buy) ? (
+          <span className="flex flex-col text-sm">
+            {item?.vendor_sell ? (
+              <span>
+                <span className="text-xs text-muted">paga </span>
+                <Money value={item.vendor_sell} />
+              </span>
+            ) : null}
+            {item?.vendor_sold && item.vendor_buy ? (
+              <span>
+                <span className="text-xs text-muted">vende a </span>
+                <Money value={item.vendor_buy} />
+              </span>
+            ) : null}
+          </span>
+        ) : (
+          "—"
+        ),
     },
   ];
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className={`flex items-center gap-3 text-xl font-semibold q-${item?.quality ?? "COMMON"}`}>
-          <ItemIcon src={item?.icon_url || null} quality={item?.quality} size={36} />
-          {pick(item?.name_en, item?.name_es, lang) ?? `Objeto #${itemId}`}
-        </h1>
-        <p className="text-xs text-muted">
-          ID {itemId}
-          {item?.class && ` · ${typeName(item.class)}${item.subclass ? ` / ${typeName(item.subclass)}` : ""}`}
-          {lang === "es" && item?.name_es && item.name_en && ` · ${item.name_en}`}
-        </p>
-        <a
-          href={wowheadItemUrl(itemId, lang)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line px-3 text-sm text-muted hover:text-fg"
-        >
-          Ver en Wowhead (dónde sale, para qué sirve) ↗
-        </a>
-      </div>
+    <div className="space-y-5">
+      <section className="card-accent space-y-4">
+        <div className="flex items-start gap-4">
+          <ItemIcon src={item?.icon_url || null} quality={item?.quality} size={56} />
+          <div className="min-w-0 flex-1">
+            <p className="eyebrow">{item?.class ? `${typeName(item.class)}${item.subclass ? ` · ${typeName(item.subclass)}` : ""}` : `Objeto ${itemId}`}</p>
+            <h1 className={`mt-1 text-xl leading-tight font-semibold sm:text-2xl q-${item?.quality ?? "COMMON"}`}>
+              {pick(item?.name_en, item?.name_es, lang) ?? `Objeto #${itemId}`}
+            </h1>
+            <p className="mt-1 text-xs text-muted">
+              ID {itemId}
+              {lang === "es" && item?.name_es && item.name_en && ` · ${item.name_en}`}
+            </p>
+          </div>
+          <a href={wowheadItemUrl(itemId, lang)} target="_blank" rel="noopener noreferrer" className="btn-ghost shrink-0" title="Dónde sale y para qué sirve, en Wowhead" aria-label="Ver en Wowhead">
+            <span className="hidden sm:inline">Wowhead</span>
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <path d="M7 17 17 7M8 7h9v9" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 border-t border-gold/15 pt-4 sm:grid-cols-3">
+          <div>
+            <p className="flex items-center gap-1 text-xs text-muted">
+              Más barato ahora
+              <Hint label="Qué es “Más barato ahora”">Precio por unidad de la subasta más barata en este momento: lo que pagarías si compras ya.</Hint>
+            </p>
+            <p className="mt-1 text-2xl font-semibold">
+              <Money value={latest?.min_buyout} />
+            </p>
+            {pct !== null && Math.abs(pct) >= 3 && (
+              <span className={`badge mt-1 ${pct < 0 ? "border-good/40 bg-good/10 text-good" : "border-bad/40 bg-bad/10 text-bad"}`}>
+                {pct < 0 ? "−" : "+"}
+                {Math.abs(pct)}% frente a lo normal
+              </span>
+            )}
+          </div>
+          <div>
+            <p className="flex items-center gap-1 text-xs text-muted">
+              Precio normal
+              <Hint label="Qué es “Precio normal”">
+                Mediana de la última semana. Si “más barato ahora” está muy por debajo, es buen momento para comprar; si está por encima, para
+                vender.
+              </Hint>
+            </p>
+            <p className="mt-1 text-lg font-semibold">
+              <Money value={latest?.market_7d} />
+            </p>
+            <p className="text-[11px] text-muted">mediana de 7 días</p>
+          </div>
+          <div className="col-span-2 sm:col-span-1">
+            <p className="flex items-center gap-1 text-xs text-muted">
+              Publica a
+              <Hint label="Qué es “Publica a”">
+                {latest?.real_min != null
+                  ? `Ojo: el más barato son ${latest.bait_units} ud sueltas muy por debajo (un cebo para que la gente rebaje). El precio real empieza en ${formatMoney(latest.real_min)}: publica 1c por debajo de ese, no del cebo (o compra el cebo, que está barato).`
+                  : "1 cobre por debajo del más barato: así tu subasta sale la primera."}
+              </Hint>
+            </p>
+            <p className="mt-1 text-lg font-semibold">
+              <Money value={listAt} />
+            </p>
+            {latest?.real_min != null && <span className="badge mt-1 border-bad/50 text-bad">hay un cebo de {latest.bait_units} ud</span>}
+          </div>
+        </div>
+      </section>
 
       <HouseTabs houses={houses} current={house.id} hrefFor={(h) => `/item/${itemId}?house=${h}`} />
 
-      <dl className="grid grid-cols-2 gap-3">
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {stats.map((s) => (
-          <div key={s.label} className="card">
+          <div key={s.label} className="card p-3.5">
             <dt className="flex items-center gap-1 text-xs text-muted">
               {s.label}
               <Hint label={`Qué es “${s.label}”`}>{s.hint}</Hint>
             </dt>
-            <dd className="mt-1 font-mono text-base">{s.value}</dd>
+            <dd className="mt-1.5 font-mono text-base">{s.value}</dd>
           </div>
         ))}
       </dl>
@@ -206,12 +264,12 @@ function RecipeList({ title, recipes, houseId, lang, showQty }: { title: string;
       <h2 className="text-sm font-medium text-muted">
         {title} <span className="font-normal">({recipes.length})</span>
       </h2>
-      <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface text-sm">
+      <ul className="list text-sm">
         {recipes.map((r) => (
           <li key={r.id}>
             <Link
               href={`/professions/${r.slug}?house=${houseId}&q=${encodeURIComponent(r.name)}`}
-              className="flex items-center justify-between gap-3 px-4 py-2.5 active:bg-surface-2"
+              className="flex items-center justify-between gap-3 px-4 py-2.5 row"
             >
               <span className="min-w-0 truncate">
                 {showQty && r.qty ? <span className="text-muted">{r.qty} × en </span> : null}
@@ -252,7 +310,7 @@ async function WatchForm({ itemId, back, msg, current }: { itemId: number; back:
           <input type="hidden" name="itemId" value={itemId} />
           <input type="hidden" name="back" value={back} />
           {needToken && <input name="token" type="password" required placeholder="Contraseña" className="input w-32" aria-label="Contraseña de administración" />}
-          <button className="min-h-9 shrink-0 rounded-lg border border-line px-3 text-muted">Quitar</button>
+          <button className="btn-ghost shrink-0 text-muted">Quitar</button>
         </form>
       )}
       <form action={addWatch} className="grid grid-cols-[auto_1fr] gap-2">

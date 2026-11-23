@@ -33,6 +33,7 @@ export default function Page({ searchParams }: PageProps<"/deseos">) {
   return (
     <div className="space-y-4">
       <PageIntro
+        eyebrow="Tu equipo"
         title="Lista de deseos"
         summary="Las piezas de equipo que quieres para tu paladín: cuánto cuestan ahora, su precio más bajo del mes y cuándo comprarlas."
         steps={[
@@ -110,7 +111,7 @@ async function Wishlist({ searchParams }: Pick<PageProps<"/deseos">, "searchPara
           {items.length === 0 ? "Tu lista está vacía. Añade la primera pieza arriba o desde la ficha de cualquier objeto." : "¡Lo tienes todo! 🎉"}
         </p>
       ) : (
-        <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+        <ul className="list">
           {bySlot.map(({ i, a }) => (
             <li key={i.item_id} className="space-y-2 px-4 py-3">
               <WishLine i={i} lang={lang} houseId={house.id} />
@@ -133,7 +134,7 @@ async function Wishlist({ searchParams }: Pick<PageProps<"/deseos">, "searchPara
                     <input type="hidden" name="itemId" value={i.item_id} />
                     <input type="hidden" name="back" value={back} />
                     {tokenField}
-                    <button className="min-h-9 rounded-lg border border-line px-3 text-bad">Quitar de la lista</button>
+                    <button className="btn-ghost text-bad">Quitar de la lista</button>
                   </form>
                 </details>
               </div>
@@ -145,7 +146,7 @@ async function Wishlist({ searchParams }: Pick<PageProps<"/deseos">, "searchPara
       {obtained.length > 0 && (
         <details className="text-sm">
           <summary className="py-1 text-muted">Ya las tienes ({obtained.length})</summary>
-          <ul className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+          <ul className="mt-2 list">
             {obtained.map((i) => (
               <li key={i.item_id} className="flex items-center justify-between gap-3 px-4 py-2.5">
                 <span className="flex min-w-0 items-center gap-2 opacity-70">
