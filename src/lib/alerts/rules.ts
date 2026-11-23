@@ -18,9 +18,9 @@ export type AlertSettings = {
 export const DEFAULT_ALERTS: AlertSettings = { enabled: true, minDealProfit: 50000, maxPerRun: 5, dailyHour: 9, lang: "en", leveling: [] };
 
 /** Horas de antispam por tipo (CLAUDE.md: como mucho una alerta por objeto cada 6 h). */
-export const COOLDOWN_HOURS = { deal: 6, watch: 6, leveling: 24, reset: 12, event: 72 } as const;
+export const COOLDOWN_HOURS = { deal: 6, watch: 6, leveling: 24, reset: 12, event: 72, wish: 24 } as const;
 
-export type Alert = { key: string; kind: "deal" | "watch" | "leveling" | "reset" | "event" | "digest" | "test"; itemId?: number; html: string };
+export type Alert = { key: string; kind: "deal" | "watch" | "leveling" | "reset" | "event" | "wish" | "digest" | "test"; itemId?: number; html: string };
 
 export type DealCandidate = {
   itemId: number;
@@ -163,6 +163,22 @@ export function eventAlerts(events: EventAlertInput[], recent: ReadonlySet<strin
     }
   }
   return out;
+}
+
+export type WishCandidate = { itemId: number; name: string; min: number | null; maxPrice: number | null; obtained: boolean };
+
+/** Piezas de la lista de deseos que bajan de tu precio máximo (una vez al día como mucho). */
+export function wishAlerts(items: WishCandidate[], recent: ReadonlySet<string>, base: string): Alert[] {
+  return items
+    .filter((w) => !w.obtained && w.min !== null && w.maxPrice !== null && w.min <= w.maxPrice && !recent.has(`wish:${w.itemId}`))
+    .map((w) => ({
+      key: `wish:${w.itemId}`,
+      kind: "wish",
+      itemId: w.itemId,
+      html:
+        `♥ <b>Lista de deseos</b>: ${link(base, `/item/${w.itemId}`, w.name)} está a <b>${formatMoney(w.min)}</b>\n` +
+        `Tu máximo: ${formatMoney(w.maxPrice)}. ¡Cómprala!`,
+    }));
 }
 
 /** Fecha y hora en Polonia. */

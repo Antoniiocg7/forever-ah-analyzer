@@ -24,6 +24,12 @@ const SECTIONS: { id: string; title: string; href?: string; text: ReactNode }[] 
     text: "Todas las recetas de cada profesión con lo que cuesta fabricarlas y lo que ganas vendiéndolas. Dentro de cada profesión, “Planificar subida” calcula la forma más barata de subir de nivel y te da la lista de la compra.",
   },
   {
+    id: "deseos",
+    title: "Deseos",
+    href: "/deseos",
+    text: "Tu lista de piezas de equipo para el paladín: precio de cada una, su mínimo del mes, hasta cuánto pagarías y si conviene comprarla ya o esperar.",
+  },
+  {
     id: "ajustes",
     title: "Ajustes",
     href: "/admin/houses",

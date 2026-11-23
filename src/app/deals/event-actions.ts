@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { adminTokenOk } from "@/lib/admin";
+import { findItemId } from "@/lib/item-search";
 import { supabaseAdmin } from "@/lib/supabase";
 
 const back = (msg: string, eventId?: number) => redirect(`/deals?tab=events&msg=${msg}${eventId ? `#evento-${eventId}` : ""}`);
@@ -13,18 +14,9 @@ function guard(formData: FormData): number {
   return eventId;
 }
 
-/** Busca el objeto por ID o por nombre exacto (inglés o español). */
-async function findItem(query: string): Promise<number | null> {
-  const q = query.trim();
-  if (/^\d+$/.test(q)) return Number(q);
-  const { data, error } = await supabaseAdmin().from("items").select("id").or(`name_en.ilike.${q.replace(/[,()]/g, "")},name_es.ilike.${q.replace(/[,()]/g, "")}`).limit(2);
-  if (error) throw new Error(error.message);
-  return data?.length === 1 ? (data[0].id as number) : null;
-}
-
 export async function addEventItem(formData: FormData) {
   const eventId = guard(formData);
-  const itemId = await findItem(String(formData.get("item") ?? ""));
+  const itemId = await findItemId(String(formData.get("item") ?? ""));
   if (!itemId) back("no-item", eventId);
   const qtyRaw = String(formData.get("qty") ?? "").trim();
   const qty = qtyRaw === "" ? null : Number(qtyRaw);

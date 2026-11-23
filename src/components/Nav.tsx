@@ -26,6 +26,13 @@ const LINKS = [
     icon: "M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z",
   },
   {
+    href: "/deseos",
+    label: "Deseos",
+    hint: "Tu lista de deseos de equipo: precio de cada pieza y cuándo comprarla",
+    match: (p: string) => p.startsWith("/deseos"),
+    icon: "M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z",
+  },
+  {
     href: "/admin/houses",
     label: "Ajustes",
     hint: "Qué casas de subastas se siguen y alertas de Telegram",
@@ -35,6 +42,8 @@ const LINKS = [
   {
     href: "/ayuda",
     label: "Ayuda",
+    /** En el móvil no cabe: se llega desde “Cómo se usa” y desde Ajustes. */
+    desktopOnly: true,
     hint: "Para qué sirve cada apartado y qué significa cada número",
     match: (p: string) => p.startsWith("/ayuda"),
     icon: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01",
@@ -79,7 +88,7 @@ function BottomNavView({ path }: { path: string }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
       <div className="mx-auto grid max-w-md grid-cols-5">
-        {LINKS.map((l) => {
+        {LINKS.filter((l) => !("desktopOnly" in l)).map((l) => {
           const active = l.match(path);
           return (
             <Link

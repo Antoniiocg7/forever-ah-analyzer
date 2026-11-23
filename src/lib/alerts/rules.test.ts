@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ALERTS, dealAlerts, digestHtml, digestKeyDue, eventAlerts, levelingAlerts, resetAlerts, warsawNow, watchAlerts, type DealCandidate } from "./rules";
+import { DEFAULT_ALERTS, dealAlerts, digestHtml, digestKeyDue, eventAlerts, levelingAlerts, resetAlerts, warsawNow, watchAlerts, wishAlerts, type DealCandidate } from "./rules";
 
 const base = "https://example.test";
 const deal = (itemId: number, depthProfit: number): DealCandidate => ({ itemId, name: `Item ${itemId}`, min: 100, market7d: 200, units: 3, cost: 300, depthProfit, soldPerDay: 10 });
@@ -115,5 +115,18 @@ describe("eventAlerts", () => {
   });
   it("no repite el aviso de vender a mitad de un evento largo", () => {
     expect(eventAlerts([{ ...ev, phase: "during", daysUntil: 0, daysLeft: 10, daysSinceStart: 5 }], new Set(), "https://x")).toEqual([]);
+  });
+});
+
+describe("wishAlerts", () => {
+  const w = { itemId: 12640, name: "Lionheart Helm", min: 900000, maxPrice: 1000000, obtained: false };
+  it("avisa cuando baja de tu máximo", () => {
+    expect(wishAlerts([w], new Set(), "https://x")[0].key).toBe("wish:12640");
+  });
+  it("no avisa si está por encima, si ya la tienes, sin máximo o si ya avisó", () => {
+    expect(wishAlerts([{ ...w, min: 1100000 }], new Set(), "https://x")).toEqual([]);
+    expect(wishAlerts([{ ...w, obtained: true }], new Set(), "https://x")).toEqual([]);
+    expect(wishAlerts([{ ...w, maxPrice: null }], new Set(), "https://x")).toEqual([]);
+    expect(wishAlerts([w], new Set(["wish:12640"]), "https://x")).toEqual([]);
   });
 });

@@ -5,6 +5,7 @@ import { pick } from "../lang";
 import { scoreDeal } from "../pricing/deals";
 import { eventAdvice } from "../seasonal";
 import { seasonalEvents } from "../seasonal-queries";
+import { wishlist } from "../wishlist-queries";
 import { buildPlan } from "../professions/plan";
 import { economySettings, marketData, recipesFor } from "../professions/queries";
 import { hoursSinceLastIngest, trackedHouses } from "../queries";
@@ -15,6 +16,7 @@ import {
   dealAlerts,
   digestHtml,
   eventAlerts,
+  wishAlerts,
   digestKeyDue,
   levelingAlerts,
   resetAlerts,
@@ -190,6 +192,17 @@ export async function runAlerts(db: SupabaseClient, now = new Date()): Promise<A
     ...levelingAlerts(leveling, recent, PUBLIC_URL),
     ...resetAlerts(resets, s, recent, PUBLIC_URL),
     ...(await seasonalAlertInputs(house.id, s, now).then((ev) => eventAlerts(ev, recent, PUBLIC_URL))),
+    ...wishAlerts(
+      (await wishlist(house.id)).map((w) => ({
+        itemId: w.item_id,
+        name: pick(w.name_en, w.name_es, s.lang) ?? `#${w.item_id}`,
+        min: w.latest?.min_buyout ?? null,
+        maxPrice: w.max_price,
+        obtained: w.obtained,
+      })),
+      recent,
+      PUBLIC_URL,
+    ),
   ];
 
   const digestKey = digestKeyDue(now, s.dailyHour, recent);

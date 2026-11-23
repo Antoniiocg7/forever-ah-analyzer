@@ -39,6 +39,15 @@ export default function Page({ searchParams }: PageProps<"/admin/houses">) {
           →
         </span>
       </Link>
+      <Link href="/ayuda" className="card flex items-center justify-between gap-3 active:bg-surface-2">
+        <span>
+          <span className="block font-medium">Ayuda y glosario</span>
+          <span className="block text-sm text-muted">Para qué sirve cada apartado y qué significa cada número.</span>
+        </span>
+        <span className="shrink-0 text-gold" aria-hidden>
+          →
+        </span>
+      </Link>
       <h2 className="pt-2 font-medium">Casas de subastas</h2>
       <p className="-mt-2 text-sm text-muted">
         Para cada grupo verás el precio de unos materiales comunes en cada casa. Compáralos con lo que ves en tu subasta del juego y pulsa

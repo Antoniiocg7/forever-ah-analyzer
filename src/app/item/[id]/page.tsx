@@ -15,6 +15,9 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { addWatch, removeWatch } from "@/app/alerts/actions";
 import { recipesForItem, type RecipeLink } from "@/lib/professions/queries";
 import { hoursSince, resetHistory } from "@/lib/deals-queries";
+import { SLOTS } from "@/lib/wishlist";
+import { wishFor } from "@/lib/wishlist-queries";
+import { WishForm } from "@/app/deseos/WishForm";
 import { dailySeries, hourlySeries, itemById, itemClassNames, latestPrice, trackedHouses } from "@/lib/queries";
 
 export default function Page(props: PageProps<"/item/[id]">) {
@@ -40,7 +43,7 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
   if (houses.length === 0) return <NoHousesNotice />;
   const house = houses.find((h) => String(h.id) === sp.house) ?? houses[0];
 
-  const [item, latest, hourly, daily, recipes, lang, classNames, resets] = await Promise.all([
+  const [item, latest, hourly, daily, recipes, lang, classNames, resets, wish] = await Promise.all([
     itemById(itemId),
     latestPrice(house.id, itemId),
     hourlySeries(house.id, itemId),
@@ -49,7 +52,9 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
     nameLang(),
     itemClassNames(),
     resetHistory(house.id, [itemId]).then((m) => m.get(itemId) ?? null),
+    wishFor(itemId),
   ]);
+  const isGear = item?.class === "Armor" || item?.class === "Weapon";
   const typeName = (en: string | null | undefined) => (en ? (lang === "es" ? (classNames.get(en) ?? en) : en) : null);
 
   // Ventas por día: media de 7 días ya calculada; si no hay, la de los días disponibles.
@@ -154,6 +159,33 @@ async function ItemView({ params, searchParams }: PageProps<"/item/[id]">) {
 
       <PriceChart hourly={hourly} daily={daily} />
 
+      {wish ? (
+        <section className="card flex items-center justify-between gap-3 text-sm">
+          <span>
+            <span className="text-bad">♥</span> En tu lista de deseos{wish.obtained ? " (ya la tienes)" : ""}
+            {wish.slot && <span className="text-muted"> · {SLOTS[wish.slot]}</span>}
+            {wish.max_price !== null && <span className="text-muted"> · pagarías hasta {formatMoney(Number(wish.max_price))}</span>}
+          </span>
+          <Link href={`/deseos?house=${house.id}`} className="shrink-0 text-gold underline">
+            Ver lista
+          </Link>
+        </section>
+      ) : (
+        <details className="card text-sm" open={false}>
+          <summary className={isGear ? "font-medium text-gold" : "text-muted"}>♥ Añadir a mi lista de deseos</summary>
+          <WishForm
+            back={`/item/${itemId}?house=${house.id}`}
+            wish={{ item_id: itemId, slot: null, priority: 2, max_price: null, note: null }}
+            submitLabel="Añadir a la lista"
+            tokenField={
+              adminTokenRequired() && (
+                <input name="token" type="password" required placeholder="Contraseña" className="input" autoComplete="current-password" aria-label="Contraseña de administración" />
+              )
+            }
+          />
+        </details>
+      )}
+
       <WatchForm itemId={itemId} back={`/item/${itemId}?house=${house.id}`} msg={typeof sp.msg === "string" ? sp.msg : undefined} current={latest?.min_buyout ?? null} />
 
       <RecipeList title="Recetas que lo fabrican" recipes={recipes.makes} houseId={house.id} lang={lang} />
@@ -197,6 +229,7 @@ function RecipeList({ title, recipes, houseId, lang, showQty }: { title: string;
 const WATCH_MSG: Record<string, { text: string; ok: boolean }> = {
   aviso: { text: "Aviso guardado: te llegará por Telegram.", ok: true },
   quitado: { text: "Aviso quitado.", ok: true },
+  guardado: { text: "Añadida a tu lista de deseos.", ok: true },
   token: { text: "La contraseña de administración no es correcta.", ok: false },
   invalid: { text: "Precio no válido. Escríbelo como 1g 20s, 35s o 1,5.", ok: false },
 };
